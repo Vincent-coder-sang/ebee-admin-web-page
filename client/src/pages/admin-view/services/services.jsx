@@ -82,32 +82,50 @@ const AdminServices = () => {
   };
 
   const handleDeleteClick = (serviceId) => {
+    // don't use window.confirm here use a beutiful modal
     if (window.confirm("Are you sure you want to delete this service?")) {
-      dispatch(deleteService(serviceId));
+      dispatch(deleteService(serviceId)).then(() => {
+        // Refresh services after successful deletion
+        dispatch(fetchServices());
+      });
     }
   };
 
   const handleSubmit = (e) => {
   e.preventDefault();
   
+  // Validate form
+  if (!formData.name.trim() || !formData.description.trim() || !formData.price) {
+    alert("Please fill in all fields");
+    return;
+  }
+  
+  // Convert price to number
+  const serviceData = {
+    name: formData.name.trim(),
+    description: formData.description.trim(),
+    price: parseFloat(formData.price),
+  };
+  
   if (editingService) {
-    // FIXED: Pass as an object with serviceData and serviceId
     dispatch(updateService({
-      serviceData: formData,
+      serviceData: serviceData,
       serviceId: editingService.id
     })).then(() => {
       // Refresh after update
       dispatch(fetchServices());
     });
   } else {
-    dispatch(createService(formData));
+    dispatch(createService(serviceData)).then(() => {
+      // Refresh after create
+      dispatch(fetchServices());
+    });
   }
   
   setShowForm(false);
   setFormData({ name: "", description: "", price: "" });
   setEditingService(null);
 };
-
   const handleInputChange = (e) => {
     setFormData({
       ...formData,
