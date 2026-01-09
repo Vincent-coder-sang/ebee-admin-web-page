@@ -18,12 +18,13 @@ export const fetchusersAddress = createAsyncThunk(
 	"usersAddress/fetchusersAddress",
 	async (_, { rejectWithValue }) => {
 		try {
-			const response = await axios.get(`${url}/api/address`, { headers: setHeaders() });
+			const headers = await setHeaders();
+			const response = await axios.get(`${url}/api/address`, headers);
 			return response.data;
 		} catch (error) {
 			console.error("Error fetching usersAddress:", error.response?.message);
 			toast.error(error.response?.data?.message || "Failed to fetch addresses", {
-				position: "bottom-left",
+				position: "top-center",
 			});
 			return rejectWithValue(error.response?.data);
 		}
@@ -34,7 +35,8 @@ export const createUserAddress = createAsyncThunk(
 	"usersAddress/createUserAddress",
 	async (formData, { rejectWithValue }) => {
 		try {
-			const response = await axios.post(`${url}/address/get`, formData, { headers: setHeaders() });
+			const headers = await setHeaders();
+			const response = await axios.post(`${url}/address/get`, formData, headers);
 
 			toast.success(response.data?.message, {
 				position: "top-center",
@@ -45,7 +47,7 @@ export const createUserAddress = createAsyncThunk(
 			console.error("Error creating UserAddress:", error.response?.data?.message || error.message);
 
 			toast.error(error.response?.data?.message || "Failed to create address", {
-				position: "bottom-left",
+				position: "top-center",
 			});
 
 			return rejectWithValue(error.response?.data);
@@ -57,9 +59,11 @@ export const deleteUserAddress = createAsyncThunk(
 	"usersAddress/deleteUserAddress",
 	async (UserAddressId, { rejectWithValue }) => {
 		try {
-			await axios.delete(`${url}/address/delete/${UserAddressId}`, { headers: setHeaders() });
+			const headers = await setHeaders()
+			const response = await axios.delete(`${url}/address/delete/${UserAddressId}`, headers);
 
-			toast.success("Address deleted successfully", {
+			console.log("Address deleted successfully:", response.data);
+			toast.success(response.data?.message, {
 				position: "top-center",
 			});
 
@@ -78,7 +82,8 @@ export const updateUserAddress = createAsyncThunk(
 	"usersAddress/updateUserAddress",
 	async ({ addressId, values }, { rejectWithValue }) => {
 		try {
-			const response = await axios.put(`${url}/address/update/${addressId}`, values, { headers: setHeaders() });
+			const headers = await setHeaders()
+			const response = await axios.put(`${url}/address/update/${addressId}`, values, headers);
 
 			toast.success("Address updated successfully", {
 				position: "top-center",
@@ -88,7 +93,7 @@ export const updateUserAddress = createAsyncThunk(
 		} catch (error) {
 			console.error("Error updating UserAddress:", error.response?.message);
 			toast.error(error.response?.data?.message || "Failed to update address", {
-				position: "bottom-left",
+				position: "top-center",
 			});
 			return rejectWithValue(error.response?.data);
 		}

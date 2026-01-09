@@ -124,7 +124,7 @@ const servicesSlice = createSlice({
         state.status = "pending";
       })
       .addCase(createService.fulfilled, (state, action) => {
-        state.list = action.payload;
+        state.list = action.payload.data;
         state.status = "success";
       })
       .addCase(createService.rejected, (state,action) => {
