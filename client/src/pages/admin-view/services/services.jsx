@@ -5,7 +5,6 @@ import {
   createService,
   updateService,
   deleteService,
-  resetServices,
 } from "@/features/slices/serviceSlice";
 import {
   Table,
@@ -20,21 +19,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { MdSearch, MdAdd, MdRefresh, MdEdit, MdDelete, MdBugReport } from "react-icons/md";
+import { MdSearch, MdAdd, MdRefresh, MdEdit, MdDelete } from "react-icons/md";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
 const AdminServices = () => {
   const dispatch = useDispatch();
-  const { list: services, status } = useSelector((state) => state.services);
+  const { list: services = [], status } = useSelector((state) => state.services);
   
-  // DEBUG: Log the services state
-  useEffect(() => {
-    console.log("Services state:", services);
-    console.log("Is array?", Array.isArray(services));
-    console.log("Services type:", typeof services);
-  }, [services]);
-
   const [searchTerm, setSearchTerm] = useState("");
   const [isMobileView, setIsMobileView] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -55,36 +47,22 @@ const AdminServices = () => {
     return () => window.removeEventListener("resize", handleResize);
   }, [dispatch]);
 
-  // SAFE FILTERING - Always ensure services is an array
-  const safeServices = Array.isArray(services) ? services : [];
-  
-  const filteredServices = safeServices.filter(
-    (service) =>
-      service?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      service?.description?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // SAFE FILTERING
+  const filteredServices = Array.isArray(services) 
+    ? services.filter((service) => {
+        if (!service) return false;
+        const name = service.name || "";
+        const description = service.description || "";
+        const searchLower = searchTerm.toLowerCase();
+        return (
+          name.toLowerCase().includes(searchLower) ||
+          description.toLowerCase().includes(searchLower)
+        );
+      })
+    : [];
 
   const refreshServices = () => {
-    console.log("Refreshing services...");
     dispatch(fetchServices());
-  };
-
-  // Debug function
-  const debugState = () => {
-    console.log("=== DEBUG SERVICES STATE ===");
-    console.log("services:", services);
-    console.log("Is array?", Array.isArray(services));
-    console.log("Type:", typeof services);
-    console.log("Length:", safeServices.length);
-    console.log("Status:", status);
-    console.log("======================");
-    
-    // Try to reset if corrupted
-    if (!Array.isArray(services)) {
-      console.log("Services is corrupted! Resetting...");
-      dispatch(resetServices());
-      setTimeout(() => dispatch(fetchServices()), 1000);
-    }
   };
 
   const handleAddClick = () => {
@@ -96,8 +74,8 @@ const AdminServices = () => {
   const handleEditClick = (service) => {
     setEditingService(service);
     setFormData({
-      name: service.name,
-      description: service.description,
+      name: service.name || "",
+      description: service.description || "",
       price: service.price?.toString() || "",
     });
     setShowForm(true);
@@ -125,7 +103,10 @@ const AdminServices = () => {
     };
     
     if (editingService) {
-      dispatch(updateService({ ...serviceData, id: editingService.id }));
+      dispatch(updateService({ ...serviceData, id: editingService.id })).then(() => {
+        // Refresh after update to ensure data is fresh
+        dispatch(fetchServices());
+      });
     } else {
       dispatch(createService(serviceData));
     }
@@ -142,7 +123,7 @@ const AdminServices = () => {
     });
   };
 
-  if (status === "pending" && safeServices.length === 0) {
+  if (status === "pending" && services.length === 0) {
     return (
       <div className="container mx-auto px-4 py-6">
         <div className="flex flex-col gap-6">
@@ -254,22 +235,12 @@ const AdminServices = () => {
       <div className="flex flex-col gap-6">
         {/* Header Section */}
         <div className="flex flex-col gap-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold">Service Management</h1>
-              <p className="text-sm text-muted-foreground">
-                {filteredServices.length}{" "}
-                {filteredServices.length === 1 ? "service" : "services"} found
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={debugState}
-              title="Debug State"
-            >
-              <MdBugReport className="h-4 w-4" />
-            </Button>
+          <div>
+            <h1 className="text-2xl font-bold">Service Management</h1>
+            <p className="text-sm text-muted-foreground">
+              {filteredServices.length}{" "}
+              {filteredServices.length === 1 ? "service" : "services"} found
+            </p>
           </div>
 
           {/* Search and Actions */}
@@ -302,30 +273,6 @@ const AdminServices = () => {
             </div>
           </div>
         </div>
-
-        {/* Debug Info (only show if something is wrong) */}
-        {!Array.isArray(services) && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <div className="flex items-center text-yellow-800">
-              <MdBugReport className="h-5 w-5 mr-2" />
-              <span className="font-medium">Debug: Services state is corrupted</span>
-            </div>
-            <p className="text-sm text-yellow-600 mt-1">
-              Services is not an array. Type: {typeof services}
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                dispatch(resetServices());
-                dispatch(fetchServices());
-              }}
-              className="mt-2"
-            >
-              Reset State
-            </Button>
-          </div>
-        )}
 
         {/* Services List */}
         <Card>
