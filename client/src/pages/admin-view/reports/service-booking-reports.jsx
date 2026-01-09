@@ -28,8 +28,8 @@ import {
   TrendingUp,
   Calendar as CalendarIcon
 } from 'lucide-react';
-import DateRangePicker from '../../../components/reports/DateRangePicker';
 import { getBookings } from '@/features/slices/bookingSlice';
+import DateRangePicker from '@/components/common/date-range-picker';
 
 const ServiceBookingReports = () => {
   const dispatch = useDispatch();
