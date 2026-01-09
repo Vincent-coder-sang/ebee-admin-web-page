@@ -79,12 +79,12 @@ export const createService = createAsyncThunk(
 
 export const updateService = createAsyncThunk(
   "services/updateService",
-  async (serviceData) => {
+  async (serviceData, serviceId) => {
     try {
       const headers = await setHeaders()
       console.log("updateService -> headers", headers)
       const response = await axios.post(
-        `${url}/services/update/${serviceData.id}`,
+        `${url}/services/update/${serviceId}`,//expecting serviceId to be passed in
         serviceData, headers
       );
       const message = response?.data?.message;
@@ -124,6 +124,7 @@ const servicesSlice = createSlice({
         state.status = "pending";
       })
       .addCase(createService.fulfilled, (state, action) => {
+        console.log("action.payload", action.payload);
         state.list = action.payload.data;
         state.status = "success";
       })

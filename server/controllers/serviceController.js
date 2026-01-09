@@ -11,9 +11,9 @@ const createService = async (req, res) => {
       userId,
     });
 
-    res.status(200).json({ success: true, data: newService });
+    res.status(200).json({ success: true, data: newService, message: "Service created successfully" });
   } catch (error) {
-    console.error("Error creating service:", error);
+   
     res.status(500).json({ success: false, message: error.message });
   }
 };

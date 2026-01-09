@@ -5,6 +5,7 @@ import {
   createService,
   updateService,
   deleteService,
+  resetServices,
 } from "@/features/slices/serviceSlice";
 import {
   Table,
@@ -19,13 +20,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { MdSearch, MdAdd, MdRefresh, MdEdit, MdDelete } from "react-icons/md";
+import { MdSearch, MdAdd, MdRefresh, MdEdit, MdDelete, MdBugReport } from "react-icons/md";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
 const AdminServices = () => {
   const dispatch = useDispatch();
   const { list: services, status } = useSelector((state) => state.services);
+  
+  // DEBUG: Log the services state
+  useEffect(() => {
+    console.log("Services state:", services);
+    console.log("Is array?", Array.isArray(services));
+    console.log("Services type:", typeof services);
+  }, [services]);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [isMobileView, setIsMobileView] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -46,14 +55,36 @@ const AdminServices = () => {
     return () => window.removeEventListener("resize", handleResize);
   }, [dispatch]);
 
-  const filteredServices = services.filter(
+  // SAFE FILTERING - Always ensure services is an array
+  const safeServices = Array.isArray(services) ? services : [];
+  
+  const filteredServices = safeServices.filter(
     (service) =>
-      service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      service.description.toLowerCase().includes(searchTerm.toLowerCase())
+      service?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      service?.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const refreshServices = () => {
+    console.log("Refreshing services...");
     dispatch(fetchServices());
+  };
+
+  // Debug function
+  const debugState = () => {
+    console.log("=== DEBUG SERVICES STATE ===");
+    console.log("services:", services);
+    console.log("Is array?", Array.isArray(services));
+    console.log("Type:", typeof services);
+    console.log("Length:", safeServices.length);
+    console.log("Status:", status);
+    console.log("======================");
+    
+    // Try to reset if corrupted
+    if (!Array.isArray(services)) {
+      console.log("Services is corrupted! Resetting...");
+      dispatch(resetServices());
+      setTimeout(() => dispatch(fetchServices()), 1000);
+    }
   };
 
   const handleAddClick = () => {
@@ -67,7 +98,7 @@ const AdminServices = () => {
     setFormData({
       name: service.name,
       description: service.description,
-      price: service.price.toString(),
+      price: service.price?.toString() || "",
     });
     setShowForm(true);
   };
@@ -81,10 +112,22 @@ const AdminServices = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
     
+    // Validate
+    if (!formData.name.trim() || !formData.description.trim() || !formData.price) {
+      alert("Please fill in all fields");
+      return;
+    }
+    
+    const serviceData = {
+      name: formData.name.trim(),
+      description: formData.description.trim(),
+      price: parseFloat(formData.price),
+    };
+    
     if (editingService) {
-      dispatch(updateService({ ...formData, id: editingService.id }));
+      dispatch(updateService({ ...serviceData, id: editingService.id }));
     } else {
-      dispatch(createService(formData));
+      dispatch(createService(serviceData));
     }
     
     setShowForm(false);
@@ -99,7 +142,7 @@ const AdminServices = () => {
     });
   };
 
-  if (status === "pending" && services.length === 0) {
+  if (status === "pending" && safeServices.length === 0) {
     return (
       <div className="container mx-auto px-4 py-6">
         <div className="flex flex-col gap-6">
@@ -125,12 +168,23 @@ const AdminServices = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
             <div className="p-6">
-              <h2 className="text-xl font-semibold mb-4">
-                {editingService ? "Edit Service" : "Add Service"}
-              </h2>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">
+                  {editingService ? "Edit Service" : "Add Service"}
+                </h2>
+                <button
+                  onClick={() => setShowForm(false)}
+                  className="text-gray-400 hover:text-gray-600 text-xl"
+                >
+                  ✕
+                </button>
+              </div>
+              
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <Label htmlFor="name">Name</Label>
+                  <Label htmlFor="name" className="mb-2 block">
+                    Service Name *
+                  </Label>
                   <Input
                     id="name"
                     name="name"
@@ -138,10 +192,13 @@ const AdminServices = () => {
                     onChange={handleInputChange}
                     required
                     placeholder="Enter service name"
+                    disabled={status === "pending"}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="description">Description</Label>
+                  <Label htmlFor="description" className="mb-2 block">
+                    Description *
+                  </Label>
                   <Textarea
                     id="description"
                     name="description"
@@ -150,18 +207,24 @@ const AdminServices = () => {
                     required
                     placeholder="Enter service description"
                     rows={3}
+                    disabled={status === "pending"}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="price">Price (KES)</Label>
+                  <Label htmlFor="price" className="mb-2 block">
+                    Price (KES) *
+                  </Label>
                   <Input
                     id="price"
                     name="price"
                     type="number"
+                    min="0"
+                    step="0.01"
                     value={formData.price}
                     onChange={handleInputChange}
                     required
                     placeholder="Enter price"
+                    disabled={status === "pending"}
                   />
                 </div>
                 <div className="flex gap-2 pt-4">
@@ -170,11 +233,16 @@ const AdminServices = () => {
                     variant="outline"
                     onClick={() => setShowForm(false)}
                     className="flex-1"
+                    disabled={status === "pending"}
                   >
                     Cancel
                   </Button>
-                  <Button type="submit" className="flex-1">
-                    {editingService ? "Update" : "Create"}
+                  <Button 
+                    type="submit" 
+                    className="flex-1"
+                    disabled={status === "pending"}
+                  >
+                    {status === "pending" ? "Saving..." : editingService ? "Update" : "Create"}
                   </Button>
                 </div>
               </form>
@@ -186,12 +254,22 @@ const AdminServices = () => {
       <div className="flex flex-col gap-6">
         {/* Header Section */}
         <div className="flex flex-col gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">Service Management</h1>
-            <p className="text-sm text-muted-foreground">
-              {filteredServices.length}{" "}
-              {filteredServices.length === 1 ? "service" : "services"} found
-            </p>
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-bold">Service Management</h1>
+              <p className="text-sm text-muted-foreground">
+                {filteredServices.length}{" "}
+                {filteredServices.length === 1 ? "service" : "services"} found
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={debugState}
+              title="Debug State"
+            >
+              <MdBugReport className="h-4 w-4" />
+            </Button>
           </div>
 
           {/* Search and Actions */}
@@ -206,17 +284,48 @@ const AdminServices = () => {
               />
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={refreshServices}>
+              <Button 
+                variant="outline" 
+                onClick={refreshServices}
+                disabled={status === "pending"}
+              >
                 <MdRefresh className="mr-2 h-4 w-4" />
                 Refresh
               </Button>
-              <Button onClick={handleAddClick}>
+              <Button 
+                onClick={handleAddClick}
+                disabled={status === "pending"}
+              >
                 <MdAdd className="mr-2 h-4 w-4" />
                 Add Service
               </Button>
             </div>
           </div>
         </div>
+
+        {/* Debug Info (only show if something is wrong) */}
+        {!Array.isArray(services) && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex items-center text-yellow-800">
+              <MdBugReport className="h-5 w-5 mr-2" />
+              <span className="font-medium">Debug: Services state is corrupted</span>
+            </div>
+            <p className="text-sm text-yellow-600 mt-1">
+              Services is not an array. Type: {typeof services}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                dispatch(resetServices());
+                dispatch(fetchServices());
+              }}
+              className="mt-2"
+            >
+              Reset State
+            </Button>
+          </div>
+        )}
 
         {/* Services List */}
         <Card>
@@ -253,6 +362,7 @@ const AdminServices = () => {
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => handleEditClick(service)}
+                            disabled={status === "pending"}
                           >
                             <MdEdit className="h-4 w-4" />
                           </Button>
@@ -261,6 +371,7 @@ const AdminServices = () => {
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => handleDeleteClick(service.id)}
+                            disabled={status === "pending"}
                           >
                             <MdDelete className="h-4 w-4 text-red-500" />
                           </Button>
@@ -295,7 +406,21 @@ const AdminServices = () => {
                   {filteredServices.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center h-24">
-                        No services found
+                        <div className="flex flex-col items-center justify-center gap-4">
+                          <MdSearch className="w-12 h-12 text-muted-foreground" />
+                          <div>
+                            <h3 className="text-lg font-medium">No services found</h3>
+                            <p className="text-muted-foreground text-sm">
+                              {searchTerm
+                                ? "Try adjusting your search criteria"
+                                : "There are currently no services"}
+                            </p>
+                          </div>
+                          <Button variant="outline" onClick={handleAddClick}>
+                            <MdAdd className="mr-2 h-4 w-4" />
+                            Add First Service
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -333,6 +458,7 @@ const AdminServices = () => {
                               variant="ghost"
                               size="icon"
                               onClick={() => handleEditClick(service)}
+                              disabled={status === "pending"}
                             >
                               <MdEdit className="h-4 w-4" />
                             </Button>
@@ -340,6 +466,7 @@ const AdminServices = () => {
                               variant="ghost"
                               size="icon"
                               onClick={() => handleDeleteClick(service.id)}
+                              disabled={status === "pending"}
                             >
                               <MdDelete className="h-4 w-4 text-red-500" />
                             </Button>
