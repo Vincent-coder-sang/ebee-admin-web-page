@@ -22,8 +22,8 @@ import {
   Users,
   Package
 } from 'lucide-react';
-import DateRangePicker from '../../../components/reports/DateRangePicker';
 import { exportReportData, setFilters } from '@/features/slices/reportSlice';
+import DateRangePicker from '@/components/common/date-range-picker';
 
 const OrderReports = () => {
   const dispatch = useDispatch();
