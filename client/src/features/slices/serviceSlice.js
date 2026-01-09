@@ -13,7 +13,8 @@ const initialState = {
 
 export const fetchServices = createAsyncThunk("services/fetchServices", async () => {
   try {
-    const response = await axios.get(`${url}/services/get`, setHeaders());
+    const headers = await setHeaders()
+    const response = await axios.get(`${url}/services/get`, headers);
 
     const message = response?.data?.message;
 
@@ -33,9 +34,10 @@ export const deleteService = createAsyncThunk(
   "services/deleteService",
   async (serviceId) => {
     try {
+      const headers = await setHeaders()
       const response = await axios.delete(
         `${url}/services/delete/${serviceId}`,
-        setHeaders()
+        headers
       );
       const message = response?.data?.message
       console.log("deleteService -> message", message)
@@ -57,7 +59,9 @@ export const createService = createAsyncThunk(
   "services/createService",
   async (serviceData) => {
     try {
-      const response = await axios.post(`${url}/services/create`, serviceData);
+      const headers = await setHeaders()
+      console.log("createService -> headers", headers)
+      const response = await axios.post(`${url}/services/create`, serviceData, headers);
       toast.success(response?.data?.message, {
         position: "top-center",
       });
@@ -77,9 +81,11 @@ export const updateService = createAsyncThunk(
   "services/updateService",
   async (serviceData) => {
     try {
+      const headers = await setHeaders()
+      console.log("updateService -> headers", headers)
       const response = await axios.post(
         `${url}/services/update/${serviceData.id}`,
-        serviceData
+        serviceData, headers
       );
       const message = response?.data?.message;
       console.log("response from update service, response.data", response.data);
