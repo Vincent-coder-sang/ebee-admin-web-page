@@ -174,7 +174,7 @@ const AdminServices = () => {
     }
   };
 
-  if (status === "loading" && services.length === 0) {
+  if (status === "pending" && services.length === 0) {
     return (
       <div className="container mx-auto px-4 py-6">
         <div className="flex flex-col gap-6">
@@ -269,8 +269,8 @@ const AdminServices = () => {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={status === "loading"}>
-                {status === "loading" ? "Saving..." : currentService ? "Update" : "Create"}
+              <Button type="submit" disabled={status === "pending"}>
+                {status === "pending" ? "Saving..." : currentService ? "Update" : "Create"}
               </Button>
             </DialogFooter>
           </form>
@@ -295,7 +295,7 @@ const AdminServices = () => {
               onClick={handleDeleteConfirm}
               className="bg-red-600 hover:bg-red-700"
             >
-              {status === "loading" ? "Deleting..." : "Delete"}
+              {status === "pending" ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -328,7 +328,7 @@ const AdminServices = () => {
               <Button
                 variant="outline"
                 onClick={refreshServices}
-                disabled={status === "loading"}
+                disabled={status === "pending"}
               >
                 <MdRefresh className="mr-2 h-4 w-4" />
                 Refresh
@@ -392,7 +392,7 @@ const AdminServices = () => {
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => handleEdit(service)}
-                            disabled={status === "loading"}
+                            disabled={status === "pending"}
                           >
                             <MdEdit className="h-4 w-4" />
                           </Button>
@@ -401,7 +401,7 @@ const AdminServices = () => {
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => handleDeleteClick(service)}
-                            disabled={status === "loading"}
+                            disabled={status === "pending"}
                           >
                             <MdDelete className="h-4 w-4 text-red-500" />
                           </Button>
@@ -484,7 +484,7 @@ const AdminServices = () => {
                               variant="ghost"
                               size="icon"
                               onClick={() => handleEdit(service)}
-                              disabled={status === "loading"}
+                              disabled={status === "pending"}
                             >
                               <MdEdit className="h-4 w-4" />
                             </Button>
@@ -492,7 +492,7 @@ const AdminServices = () => {
                               variant="ghost"
                               size="icon"
                               onClick={() => handleDeleteClick(service)}
-                              disabled={status === "loading"}
+                              disabled={status === "pending"}
                             >
                               <MdDelete className="h-4 w-4 text-red-500" />
                             </Button>
