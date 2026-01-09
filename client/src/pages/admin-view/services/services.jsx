@@ -19,7 +19,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { MdSearch, MdAdd, MdRefresh, MdEdit, MdDelete } from "react-icons/md";
+import { 
+  MdSearch, 
+  MdAdd, 
+  MdRefresh, 
+  MdEdit, 
+  MdDelete,
+  MdWarning,
+  MdClose
+} from "react-icons/md";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
@@ -30,6 +38,8 @@ const AdminServices = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isMobileView, setIsMobileView] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [serviceToDelete, setServiceToDelete] = useState(null);
   const [editingService, setEditingService] = useState(null);
   const [formData, setFormData] = useState({
     name: "",
@@ -81,51 +91,63 @@ const AdminServices = () => {
     setShowForm(true);
   };
 
-  const handleDeleteClick = (serviceId) => {
-    // don't use window.confirm here use a beutiful modal
-    if (window.confirm("Are you sure you want to delete this service?")) {
-      dispatch(deleteService(serviceId)).then(() => {
+  const handleDeleteClick = (service) => {
+    setServiceToDelete(service);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = () => {
+    if (serviceToDelete) {
+      dispatch(deleteService(serviceToDelete.id)).then(() => {
         // Refresh services after successful deletion
         dispatch(fetchServices());
+        setShowDeleteModal(false);
+        setServiceToDelete(null);
       });
     }
   };
 
-  const handleSubmit = (e) => {
-  e.preventDefault();
-  
-  // Validate form
-  if (!formData.name.trim() || !formData.description.trim() || !formData.price) {
-    alert("Please fill in all fields");
-    return;
-  }
-  
-  // Convert price to number
-  const serviceData = {
-    name: formData.name.trim(),
-    description: formData.description.trim(),
-    price: parseFloat(formData.price),
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setServiceToDelete(null);
   };
-  
-  if (editingService) {
-    dispatch(updateService({
-      serviceData: serviceData,
-      serviceId: editingService.id
-    })).then(() => {
-      // Refresh after update
-      dispatch(fetchServices());
-    });
-  } else {
-    dispatch(createService(serviceData)).then(() => {
-      // Refresh after create
-      dispatch(fetchServices());
-    });
-  }
-  
-  setShowForm(false);
-  setFormData({ name: "", description: "", price: "" });
-  setEditingService(null);
-};
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    // Validate form
+    if (!formData.name.trim() || !formData.description.trim() || !formData.price) {
+      alert("Please fill in all fields");
+      return;
+    }
+    
+    // Convert price to number
+    const serviceData = {
+      name: formData.name.trim(),
+      description: formData.description.trim(),
+      price: parseFloat(formData.price),
+    };
+    
+    if (editingService) {
+      dispatch(updateService({
+        serviceData: serviceData,
+        serviceId: editingService.id
+      })).then(() => {
+        // Refresh after update
+        dispatch(fetchServices());
+      });
+    } else {
+      dispatch(createService(serviceData)).then(() => {
+        // Refresh after create
+        dispatch(fetchServices());
+      });
+    }
+    
+    setShowForm(false);
+    setFormData({ name: "", description: "", price: "" });
+    setEditingService(null);
+  };
+
   const handleInputChange = (e) => {
     setFormData({
       ...formData,
@@ -154,7 +176,75 @@ const AdminServices = () => {
 
   return (
     <div className="container mx-auto px-4 py-6">
-      {/* Simple Form Modal */}
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-red-100 rounded-full">
+                    <MdWarning className="h-6 w-6 text-red-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold">Delete Service</h2>
+                    <p className="text-sm text-gray-500">
+                      This action cannot be undone
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={cancelDelete}
+                  className="text-gray-400 hover:text-gray-600 text-xl"
+                >
+                  <MdClose className="h-5 w-5" />
+                </button>
+              </div>
+              
+              <div className="my-6">
+                <p className="text-gray-700">
+                  Are you sure you want to delete the service{" "}
+                  <span className="font-semibold text-gray-900">
+                    `{serviceToDelete?.name}`
+                  </span>
+                  ?
+                </p>
+                {serviceToDelete?.user && (
+                  <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-600">
+                      Created by:{" "}
+                      <span className="font-medium">{serviceToDelete.user.name}</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={cancelDelete}
+                  className="flex-1"
+                  disabled={status === "pending"}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={confirmDelete}
+                  className="flex-1"
+                  disabled={status === "pending"}
+                >
+                  {status === "pending" ? "Deleting..." : "Delete Service"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add/Edit Service Form Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
@@ -167,7 +257,7 @@ const AdminServices = () => {
                   onClick={() => setShowForm(false)}
                   className="text-gray-400 hover:text-gray-600 text-xl"
                 >
-                  ✕
+                  <MdClose className="h-5 w-5" />
                 </button>
               </div>
               
@@ -327,7 +417,7 @@ const AdminServices = () => {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
-                            onClick={() => handleDeleteClick(service.id)}
+                            onClick={() => handleDeleteClick(service)}
                             disabled={status === "pending"}
                           >
                             <MdDelete className="h-4 w-4 text-red-500" />
@@ -422,7 +512,7 @@ const AdminServices = () => {
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleDeleteClick(service.id)}
+                              onClick={() => handleDeleteClick(service)}
                               disabled={status === "pending"}
                             >
                               <MdDelete className="h-4 w-4 text-red-500" />
