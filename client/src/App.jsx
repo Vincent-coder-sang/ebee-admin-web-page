@@ -3,7 +3,7 @@ import { Route, Routes } from "react-router-dom";
 import AuthLayout from "./components/auth/layout";
 import AdminLayout from "./components/admin-view/common/layout";
 import AdminDashboard from "./pages/admin-view/dashboard/dashboard";
-import AdminProducts from "./pages/admin-view/products/admin-products";
+import AdminProducts from "./pages/admin-view/management/products/admin-products";
 import NotFound from "./pages/not-found";
 import CheckAuth from "./components/common/check-auth";
 import UnauthPage from "./pages/unauth-page";
@@ -16,20 +16,20 @@ import AuthLogin from "./pages/auth/login";
 import AuthRegister from "./pages/auth/register";
 import { loadUser } from "./features/slices/authSlice";
 import ForgotPassword from "./pages/auth/forgot-password";
-import AdminOrders from "./pages/admin-view/orders/admin-orders";
-import AdminUsers from "./pages/admin-view/users/admin-users";
-import AdminDispatch from "./pages/admin-view/dispatch/dispatch";
-import AdminTechnicians from "./pages/admin-view/technicians/technicians";
-import AdminRentals from "./pages/admin-view/rentals/rentals";
-import AdminFeedback from "./pages/admin-view/feedback/feedback";
-import AdminFines from "./pages/admin-view/fines/fines";
+import AdminOrders from "./pages/admin-view/management/orders/admin-orders";
+import AdminUsers from "./pages/admin-view/management/users/admin-users";
+import AdminFeedback from "./pages/admin-view/management/feedback/feedback";
 import AdminReports from "./pages/admin-view/reports/reports";
-import AdminHelpAndSupport from "./pages/admin-view/helpAndSupport/help-and-support";
-import AdminInventory from "./pages/admin-view/inventory/inventory";
-import AdminPayments from "./pages/admin-view/payments/payments";
+import AdminHelpAndSupport from "./pages/admin-view/management/helpAndSupport/help-and-support";
+import AdminPayments from "./pages/admin-view/management/payments/payments";
 import ResetPassword from "./pages/auth/password-reset";
 import AdminBookings from "./pages/admin-view/bookings/bookings";
-import AdminServices from "./pages/admin-view/services/services";
+import AdminServices from "./pages/admin-view/management/services/services";
+import Adminsalesmanagement from "./pages/admin-view/management/sales/sales";
+import OrderReports from "./pages/admin-view/reports/order-reports";
+import ServiceBookingReports from "./pages/admin-view/reports/service-booking-reports";
+import PurchaseOrdersReport from "./pages/admin-view/reports/purchase-order-reports";
+import CustomReports from "./pages/admin-view/reports/custom-report";
 
 const App = ({ isAuthenticated, user }) => {
   // Remove unused props
@@ -106,21 +106,25 @@ const App = ({ isAuthenticated, user }) => {
             </CheckAuth>
           }
         >
-          <Route path="dashboard" element={<AdminDashboard />} />
-          <Route path="products" element={<AdminProducts />} />
-          <Route path="users" element={<AdminUsers />} />
-          <Route path="payments" element={<AdminPayments />} />
-          <Route path="orders" element={<AdminOrders />} />
-          <Route path="dispatch" element={<AdminDispatch />} />
-          <Route path="inventory" element={<AdminInventory />} />
-          <Route path="technician" element={<AdminTechnicians />} />
-          <Route path="rentals" element={<AdminRentals />} />
-          <Route path="feedbacks" element={<AdminFeedback />} />
-          <Route path="fines" element={<AdminFines />} />
-          <Route path="reports" element={<AdminReports />} />
-          <Route path="services" element={<AdminServices />} />
-          <Route path="bookings" element={<AdminBookings />} />
-          <Route path="help&support" element={<AdminHelpAndSupport />} />
+            {/* Dashboard */}
+  <Route path="dashboard" element={<AdminDashboard />} />
+  
+  {/* Reports Section */}
+  <Route path="reports" element={<AdminReports />} />
+  <Route path="reports/purchase-orders" element={<PurchaseOrdersReport />} />
+  <Route path="reports/service-bookings" element={<ServiceBookingReports />} />
+  <Route path="reports/orders" element={<OrderReports />} />
+  <Route path="reports/custom" element={<CustomReports />} />
+ {/* Management Section */}
+  <Route path="products" element={<AdminProducts />} />
+  <Route path="orders" element={<AdminOrders />} />
+  <Route path="users" element={<AdminUsers />} />
+  <Route path="payments" element={<AdminPayments />} />
+  <Route path="feedback" element={<AdminFeedback />} />
+  <Route path="services" element={<AdminServices />} />
+  <Route path="bookings" element={<AdminBookings />} />
+  <Route path="sales" element={<Adminsalesmanagement />} />
+  <Route path="help-support" element={<AdminHelpAndSupport />} />
         </Route>
 
         {/* Public Error Pages */}

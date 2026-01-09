@@ -1,3 +1,4 @@
+// AdminSideBar.jsx (Updated with grouping and removed settings)
 /* eslint-disable no-unused-vars */
 /* eslint-disable react/prop-types */
 import {
@@ -5,15 +6,15 @@ import {
   Package,
   Users,
   ShoppingCart,
-  Settings,
-  Menu,
-  X,
-  FileText,
-  Link,
   Wrench,
   MessageSquare,
   HelpCircle,
-  BarChart3
+  BarChart3,
+  CreditCard,
+  DollarSign,
+  Menu,
+  X,
+  FolderKanban
 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -30,13 +31,20 @@ const menuItems = [
     label: "Dashboard",
     path: "/admin/dashboard",
     icon: <LayoutDashboard className="h-5 w-5" />,
+    category: "dashboard"
   },
   {
     id: "reports",
-    label: "Reports",
+    label: "Reports & Analytics",
     path: "/admin/reports",
     icon: <BarChart3 className="h-5 w-5" />,
+    category: "reports",
     submenu: [
+      {
+        id: "reports-overview",
+        label: "Overview",
+        path: "/admin/reports",
+      },
       {
         id: "purchase-orders",
         label: "Purchase Orders",
@@ -49,8 +57,13 @@ const menuItems = [
       },
       {
         id: "order-reports",
-        label: "Order Reports",
+        label: "Order Analytics",
         path: "/admin/reports/orders",
+      },
+      {
+        id: "custom-reports",
+        label: "Custom Reports",
+        path: "/admin/reports/custom",
       }
     ]
   },
@@ -59,53 +72,64 @@ const menuItems = [
     label: "Products",
     path: "/admin/products",
     icon: <Package className="h-5 w-5" />,
+    category: "management"
   },
   {
     id: "orders",
     label: "Orders",
     path: "/admin/orders",
     icon: <ShoppingCart className="h-5 w-5" />,
+    category: "management"
   },
   {
     id: "users",
     label: "Users",
     path: "/admin/users",
     icon: <Users className="h-5 w-5" />,
+    category: "management"
   },
   {
-    id: "links",
-    label: "Quick Links",
-    path: "#",
-    icon: <Link className="h-5 w-5" />,
-    submenu: [
-      {
-        id: "services",
-        label: "Services",
-        path: "/admin/services",
-      },
-      {
-        id: "sales",
-        label: "Sales",
-        path: "/admin/sales",
-      },
-      {
-        id: "feedback",
-        label: "Feedback",
-        path: "/admin/feedback",
-      },
-      {
-        id: "help-support",
-        label: "Help & Support",
-        path: "/admin/help-support",
-      }
-    ]
+    id: "bookings",
+    label: "Bookings",
+    path: "/admin/bookings",
+    icon: <FolderKanban className="h-5 w-5" />,
+    category: "management"
   },
   {
-    id: "settings",
-    label: "Settings",
-    path: "/admin/settings",
-    icon: <Settings className="h-5 w-5" />,
+    id: "services",
+    label: "Services",
+    path: "/admin/services",
+    icon: <Wrench className="h-5 w-5" />,
+    category: "management"
   },
+  {
+    id: "payments",
+    label: "Payments",
+    path: "/admin/payments",
+    icon: <CreditCard className="h-5 w-5" />,
+    category: "management"
+  },
+  {
+    id: "sales",
+    label: "Sales",
+    path: "/admin/sales",
+    icon: <DollarSign className="h-5 w-5" />,
+    category: "management"
+  },
+  {
+    id: "feedback",
+    label: "Feedback",
+    path: "/admin/feedback",
+    icon: <MessageSquare className="h-5 w-5" />,
+    category: "management"
+  },
+  {
+    id: "help-support",
+    label: "Help & Support",
+    path: "/admin/help-support",
+    icon: <HelpCircle className="h-5 w-5" />,
+    category: "management"
+  }
 ];
 
 const AdminSideBar = ({ open, setOpen }) => {
@@ -185,11 +209,46 @@ const AdminSideBar = ({ open, setOpen }) => {
     );
   };
 
+  // Group menu items by category
+  const menuByCategory = {
+    dashboard: menuItems.filter(item => item.category === 'dashboard'),
+    reports: menuItems.filter(item => item.category === 'reports'),
+    management: menuItems.filter(item => item.category === 'management')
+  };
+
   const MenuContent = ({ mobile = false }) => (
-    <nav className="space-y-1 p-4">
-      {menuItems.map((item) => (
-        <MenuItem key={item.id} item={item} mobile={mobile} />
-      ))}
+    <nav className="space-y-6 p-4">
+      {/* Dashboard Section */}
+      <div>
+        <h3 className="px-3 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          Dashboard
+        </h3>
+        {menuByCategory.dashboard.map((item) => (
+          <MenuItem key={item.id} item={item} mobile={mobile} />
+        ))}
+      </div>
+
+      {/* Reports Section */}
+      <div>
+        <h3 className="px-3 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          Reports & Analytics
+        </h3>
+        {menuByCategory.reports.map((item) => (
+          <MenuItem key={item.id} item={item} mobile={mobile} />
+        ))}
+      </div>
+
+      {/* Management Section */}
+      <div>
+        <h3 className="px-3 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          Management
+        </h3>
+        <div className="space-y-1">
+          {menuByCategory.management.map((item) => (
+            <MenuItem key={item.id} item={item} mobile={mobile} />
+          ))}
+        </div>
+      </div>
     </nav>
   );
 
@@ -229,7 +288,7 @@ const AdminSideBar = ({ open, setOpen }) => {
           <div className="p-2 rounded-lg bg-blue-100">
             <LayoutDashboard className="h-6 w-6 text-blue-600" />
           </div>
-          <h1 className="text-xl font-bold text-gray-800">Admin Panel</h1>
+          <h1 className="text-xl font-bold text-gray-800">Admin Dashboard</h1>
         </div>
         <MenuContent />
       </aside>
