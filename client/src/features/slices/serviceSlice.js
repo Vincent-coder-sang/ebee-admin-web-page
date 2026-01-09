@@ -15,6 +15,12 @@ export const fetchServices = createAsyncThunk("services/fetchServices", async ()
   try {
     const response = await axios.get(`${url}/services/get`, setHeaders());
 
+    const message = response?.data?.message;
+
+    console.log("message from fetchServices", message);
+
+    console.log("response from fetchServices", response?.data);
+
     return response.data;
   } catch (error) {
     toast.error(error.response?.data?.message, {
@@ -31,12 +37,16 @@ export const deleteService = createAsyncThunk(
         `${url}/services/delete/${serviceId}`,
         setHeaders()
       );
-      toast.success(response?.data?.message, {
+      const message = response?.data?.message
+      console.log("deleteService -> message", message)
+      toast.success(message, {
         position: "top-center",
       });
       return response.data;
     } catch (error) {
-      toast.error(error.response?.data?.message, {
+      const errorMessage = error.response?.data?.message;
+      console.log("deleteService -> errorMessage", errorMessage)
+      toast.error(errorMessage, {
         position: "top-center",
       });
     }
@@ -51,9 +61,12 @@ export const createService = createAsyncThunk(
       toast.success(response?.data?.message, {
         position: "top-center",
       });
+      console.log("response from create service, response.data", response.data);
       return response.data;
     } catch (error) {
-      toast.error(error.response?.data?.message, {
+      const errorMessage = error.response?.data?.message;
+      console.log("error from create service", errorMessage);
+      toast.error(errorMessage, {
         position: "top-center",
       });
     }
@@ -68,12 +81,16 @@ export const updateService = createAsyncThunk(
         `${url}/services/update/${serviceData.id}`,
         serviceData
       );
-      toast.success(response?.data?.message, {
+      const message = response?.data?.message;
+      console.log("response from update service, response.data", response.data);
+      toast.success(message, {
         position: "top-center",
       });
       return response.data;
     } catch (error) {
-      toast.error(error.response?.data?.message, {
+      const errorMessage = error.response?.data?.message;
+      console.log("error from update service", errorMessage);
+      toast.error(errorMessage, {
         position: "top-center",
       });
     }
