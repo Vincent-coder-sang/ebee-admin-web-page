@@ -18,7 +18,8 @@ import {
   Eye,
   Printer
 } from 'lucide-react';
-import DateRangePicker from '../../../components/reports/DateRangePicker';
+import DateRangePicker from '@/components/common/date-range-picker';
+
 
 const PurchaseOrdersReport = () => {
   const dispatch = useDispatch();
