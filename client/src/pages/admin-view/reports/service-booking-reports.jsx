@@ -2,10 +2,10 @@
 // src/pages/admin/reports/ServiceBookingReports.jsx
 import React, { useEffect, useState, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { 
-  exportReportData,
-  setFilters 
-} from '../../../redux/slices/reportsSlice';
+
+
+import { exportReportData, setFilters, filterPurchaseOrders  } from '@/features/slices/reportSlice';
+
 import { getBookings } from '../../../redux/slices/bookingSlice';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

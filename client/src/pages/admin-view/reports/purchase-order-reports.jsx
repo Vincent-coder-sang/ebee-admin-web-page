@@ -2,11 +2,9 @@
 // src/pages/admin/reports/PurchaseOrders.jsx
 import React, { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { 
-  filterPurchaseOrders, 
-  exportReportData,
-  setFilters 
-} from '../../../redux/slices/reportsSlice';
+
+import { exportReportData, setFilters, filterPurchaseOrders  } from '@/features/slices/reportSlice';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
