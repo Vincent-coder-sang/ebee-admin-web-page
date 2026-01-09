@@ -15,11 +15,27 @@ import {
   MdRefresh,
   MdCheck,
   MdClose,
-  MdPhone
+  MdPhone,
+  MdMoreVert,
+  MdFilterList
 } from "react-icons/md";
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchUsers, updateUser, deleteUser, approveUser } from '@/features/slices/usersSlice';
 import { toast } from 'react-toastify';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const AdminUsers = () => {
   const [isDialogOpen, setDialogOpen] = useState(false);
@@ -34,6 +50,7 @@ const AdminUsers = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState('all');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
 
   const dispatch = useDispatch();
   const { list: users = [], status } = useSelector((state) => state.users);
@@ -147,17 +164,17 @@ const AdminUsers = () => {
   // Loading state
   if (status === "pending") {
     return (
-      <div className="p-4 space-y-4">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="p-3 sm:p-4 space-y-4">
+        <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="w-48 h-8 bg-gray-200 rounded animate-pulse mb-2"></div>
-            <div className="w-32 h-4 bg-gray-200 rounded animate-pulse"></div>
+            <div className="w-40 sm:w-48 h-7 sm:h-8 bg-gray-200 rounded animate-pulse mb-2"></div>
+            <div className="w-28 sm:w-32 h-3 sm:h-4 bg-gray-200 rounded animate-pulse"></div>
           </div>
-          <div className="w-32 h-10 bg-gray-200 rounded animate-pulse"></div>
+          <div className="w-full sm:w-32 h-9 sm:h-10 bg-gray-200 rounded animate-pulse"></div>
         </div>
-        <div className="space-y-3">
+        <div className="space-y-2 sm:space-y-3">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="w-full h-20 bg-gray-200 rounded animate-pulse"></div>
+            <div key={i} className="w-full h-16 sm:h-20 bg-gray-200 rounded animate-pulse"></div>
           ))}
         </div>
       </div>
@@ -165,34 +182,93 @@ const AdminUsers = () => {
   }
 
   return (
-    <div className="p-4 space-y-6">
+    <div className="p-3 sm:p-4 space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">User Management</h1>
-          <p className="text-gray-600">
+          <h1 className="text-xl sm:text-2xl font-bold">User Management</h1>
+          <p className="text-sm sm:text-base text-gray-600">
             {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'} found
           </p>
         </div>
-        <Button onClick={refreshUsers} variant="outline" size="sm">
-          <MdRefresh className="w-4 h-4 mr-2" />
-          Refresh
+        <Button 
+          onClick={refreshUsers} 
+          variant="outline" 
+          size="sm"
+          className="w-full sm:w-auto"
+        >
+          <MdRefresh className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+          <span className="text-xs sm:text-sm">Refresh</span>
         </Button>
       </div>
 
       {/* Search and Filter */}
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         <div className="relative">
-          <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />
           <Input
             placeholder="Search by name or email..."
-            className="pl-9"
+            className="pl-8 sm:pl-9 text-sm sm:text-base h-9 sm:h-10"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
         
-        <div className="flex gap-2 overflow-x-auto pb-2">
+        {/* Mobile Filter Dropdown */}
+        <div className="block sm:hidden">
+          <div className="flex gap-2">
+            <Select value={filter} onValueChange={setFilter}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Filter users" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Users</SelectItem>
+                <SelectItem value="admin">Admins</SelectItem>
+                <SelectItem value="customer">Customers</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex-shrink-0"
+            >
+              <MdFilterList className="w-4 h-4" />
+            </Button>
+          </div>
+          
+          {/* Expandable filters on mobile */}
+          {showFilters && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {[
+                { value: 'all', label: 'All' },
+                { value: 'admin', label: 'Admins' },
+                { value: 'customer', label: 'Customers' },
+                { value: 'approved', label: 'Approved' },
+                { value: 'pending', label: 'Pending' }
+              ].map((filterType) => (
+                <Button
+                  key={filterType.value}
+                  variant={filter === filterType.value ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => {
+                    setFilter(filterType.value);
+                    setShowFilters(false);
+                  }}
+                  className="text-xs h-7 px-2"
+                >
+                  {filterType.label}
+                </Button>
+              ))}
+            </div>
+          )}
+        </div>
+        
+        {/* Desktop Filter Buttons */}
+        <div className="hidden sm:flex gap-2 overflow-x-auto pb-2">
           {[
             { value: 'all', label: 'All Users' },
             { value: 'admin', label: 'Admins' },
@@ -205,7 +281,7 @@ const AdminUsers = () => {
               variant={filter === filterType.value ? 'default' : 'outline'}
               size="sm"
               onClick={() => setFilter(filterType.value)}
-              className="whitespace-nowrap"
+              className="whitespace-nowrap text-xs sm:text-sm"
             >
               {filterType.label}
             </Button>
@@ -221,24 +297,25 @@ const AdminUsers = () => {
           setIsSubmitting(false);
         }
       }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-w-[95vw] mx-2">
           <DialogHeader>
-            <DialogTitle>Edit User</DialogTitle>
+            <DialogTitle className="text-lg sm:text-xl">Edit User</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
+          <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
+            <div className="space-y-1 sm:space-y-2">
+              <Label htmlFor="name" className="text-sm sm:text-base">Name</Label>
               <Input
                 id="name"
                 value={formData.name}
                 onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 required
                 disabled={isSubmitting}
+                className="text-sm sm:text-base h-9 sm:h-10"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+            <div className="space-y-1 sm:space-y-2">
+              <Label htmlFor="email" className="text-sm sm:text-base">Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -246,26 +323,28 @@ const AdminUsers = () => {
                 onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                 required
                 disabled={isSubmitting}
+                className="text-sm sm:text-base h-9 sm:h-10"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
+            <div className="space-y-1 sm:space-y-2">
+              <Label htmlFor="phone" className="text-sm sm:text-base">Phone</Label>
               <Input
                 id="phone"
                 value={formData.phoneNumber}
                 onChange={(e) => setFormData(prev => ({ ...prev, phoneNumber: e.target.value }))}
                 disabled={isSubmitting}
+                className="text-sm sm:text-base h-9 sm:h-10"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="role">Role</Label>
+            <div className="space-y-1 sm:space-y-2">
+              <Label htmlFor="role" className="text-sm sm:text-base">Role</Label>
               <select 
                 id="role"
                 value={formData.userType}
                 onChange={(e) => setFormData(prev => ({ ...prev, userType: e.target.value }))}
-                className="w-full p-2 border rounded-md"
+                className="w-full p-2 border rounded-md text-sm sm:text-base h-9 sm:h-10"
                 disabled={isSubmitting}
               >
                 <option value="customer">Customer</option>
@@ -280,14 +359,14 @@ const AdminUsers = () => {
                 type="button" 
                 variant="outline" 
                 onClick={() => setDialogOpen(false)}
-                className="flex-1"
+                className="flex-1 text-sm sm:text-base h-9 sm:h-10"
                 disabled={isSubmitting}
               >
                 Cancel
               </Button>
               <Button 
                 type="submit" 
-                className="flex-1"
+                className="flex-1 text-sm sm:text-base h-9 sm:h-10"
                 disabled={isSubmitting}
               >
                 {isSubmitting ? 'Saving...' : 'Save Changes'}
@@ -298,13 +377,13 @@ const AdminUsers = () => {
       </Dialog>
 
       {/* Users List */}
-      <div className="space-y-4">
+      <div className="space-y-2 sm:space-y-4">
         {filteredUsers.length === 0 ? (
           <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-              <MdPerson className="w-12 h-12 text-gray-300 mb-4" />
-              <h3 className="text-lg font-medium text-gray-600">No users found</h3>
-              <p className="text-gray-500">
+            <CardContent className="flex flex-col items-center justify-center py-8 sm:py-12 text-center">
+              <MdPerson className="w-8 h-8 sm:w-12 sm:h-12 text-gray-300 mb-2 sm:mb-4" />
+              <h3 className="text-base sm:text-lg font-medium text-gray-600">No users found</h3>
+              <p className="text-sm text-gray-500 mt-1">
                 {searchTerm || filter !== 'all' 
                   ? 'Try adjusting your search or filter criteria' 
                   : 'No users registered yet'
@@ -314,43 +393,51 @@ const AdminUsers = () => {
           </Card>
         ) : (
           filteredUsers.map((user) => (
-            <Card key={user.id} className="p-4 hover:shadow-md transition-shadow">
+            <Card key={user.id} className="p-3 sm:p-4 hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between">
-                <div className="flex-1 space-y-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-semibold text-gray-900">{user.name}</h3>
+                <div className="flex-1 min-w-0 space-y-1 sm:space-y-2">
+                  <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                    <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
+                      {user.name}
+                    </h3>
                     <Badge 
                       variant={user.isApproved ? "default" : "secondary"}
-                      className={user.isApproved ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}
+                      className={`text-xs px-1.5 py-0.5 ${
+                        user.isApproved 
+                          ? "bg-green-100 text-green-800" 
+                          : "bg-yellow-100 text-yellow-800"
+                      }`}
                     >
                       {user.isApproved ? 'Approved' : 'Pending'}
                     </Badge>
                   </div>
                   
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <MdEmail className="w-4 h-4 flex-shrink-0" />
+                  <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-600">
+                    <MdEmail className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
                     <span className="truncate">{user.email}</span>
                   </div>
                   
                   {user.phoneNumber && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <MdPhone className="w-4 h-4 flex-shrink-0" />
-                      <span>{user.phoneNumber}</span>
+                    <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-600">
+                      <MdPhone className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                      <span className="truncate">{user.phoneNumber}</span>
                     </div>
                   )}
                   
-                  <Badge variant="outline" className="text-xs">
+                  <Badge variant="outline" className="text-xs px-2 py-0.5">
                     {formatUserType(user.userType)}
                   </Badge>
                 </div>
                 
-                <div className="flex gap-1 ml-4 flex-shrink-0">
+                {/* Action Buttons - Desktop */}
+                <div className="hidden sm:flex gap-1 ml-4 flex-shrink-0">
                   {!user.isApproved ? (
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() => handleApproveUser(user.id, true)}
                       title="Approve User"
+                      className="h-8 w-8 p-0"
                     >
                       <MdCheck className="w-4 h-4" />
                     </Button>
@@ -360,6 +447,7 @@ const AdminUsers = () => {
                       variant="outline"
                       onClick={() => handleApproveUser(user.id, false)}
                       title="Revoke Approval"
+                      className="h-8 w-8 p-0"
                     >
                       <MdClose className="w-4 h-4" />
                     </Button>
@@ -369,6 +457,7 @@ const AdminUsers = () => {
                     variant="outline"
                     onClick={() => handleEditUser(user)}
                     title="Edit User"
+                    className="h-8 w-8 p-0"
                   >
                     <MdEdit className="w-4 h-4" />
                   </Button>
@@ -376,12 +465,82 @@ const AdminUsers = () => {
                     size="sm"
                     variant="outline"
                     onClick={() => handleDeleteUser(user.id)}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                     title="Delete User"
                   >
                     <MdDelete className="w-4 h-4" />
                   </Button>
                 </div>
+                
+                {/* Action Menu - Mobile */}
+                <div className="block sm:hidden ml-2 flex-shrink-0">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <MdMoreVert className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-40">
+                      {!user.isApproved ? (
+                        <DropdownMenuItem onClick={() => handleApproveUser(user.id, true)}>
+                          <MdCheck className="mr-2 h-4 w-4" />
+                          <span>Approve User</span>
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem onClick={() => handleApproveUser(user.id, false)}>
+                          <MdClose className="mr-2 h-4 w-4" />
+                          <span>Revoke Approval</span>
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem onClick={() => handleEditUser(user)}>
+                        <MdEdit className="mr-2 h-4 w-4" />
+                        <span>Edit User</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem 
+                        onClick={() => handleDeleteUser(user.id)}
+                        className="text-red-600 focus:text-red-600"
+                      >
+                        <MdDelete className="mr-2 h-4 w-4" />
+                        <span>Delete User</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+              
+              {/* Quick Actions - Mobile */}
+              <div className="flex sm:hidden gap-2 mt-3 pt-3 border-t">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleEditUser(user)}
+                  className="flex-1 text-xs h-8"
+                >
+                  <MdEdit className="w-3 h-3 mr-1" />
+                  Edit
+                </Button>
+                {!user.isApproved ? (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={() => handleApproveUser(user.id, true)}
+                    className="flex-1 text-xs h-8"
+                  >
+                    <MdCheck className="w-3 h-3 mr-1" />
+                    Approve
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => handleApproveUser(user.id, false)}
+                    className="flex-1 text-xs h-8"
+                  >
+                    <MdClose className="w-3 h-3 mr-1" />
+                    Revoke
+                  </Button>
+                )}
               </div>
             </Card>
           ))
