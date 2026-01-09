@@ -88,33 +88,25 @@ const AdminServices = () => {
   };
 
   const handleSubmit = (e) => {
-    e.preventDefault();
-    
-    // Validate
-    if (!formData.name.trim() || !formData.description.trim() || !formData.price) {
-      alert("Please fill in all fields");
-      return;
-    }
-    
-    const serviceData = {
-      name: formData.name.trim(),
-      description: formData.description.trim(),
-      price: parseFloat(formData.price),
-    };
-    
-    if (editingService) {
-      dispatch(updateService({ ...serviceData, id: editingService.id })).then(() => {
-        // Refresh after update to ensure data is fresh
-        dispatch(fetchServices());
-      });
-    } else {
-      dispatch(createService(serviceData));
-    }
-    
-    setShowForm(false);
-    setFormData({ name: "", description: "", price: "" });
-    setEditingService(null);
-  };
+  e.preventDefault();
+  
+  if (editingService) {
+    // FIXED: Pass as an object with serviceData and serviceId
+    dispatch(updateService({
+      serviceData: formData,
+      serviceId: editingService.id
+    })).then(() => {
+      // Refresh after update
+      dispatch(fetchServices());
+    });
+  } else {
+    dispatch(createService(formData));
+  }
+  
+  setShowForm(false);
+  setFormData({ name: "", description: "", price: "" });
+  setEditingService(null);
+};
 
   const handleInputChange = (e) => {
     setFormData({

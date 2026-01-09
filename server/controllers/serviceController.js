@@ -22,7 +22,15 @@ const updateService = async (req, res) => {
     const { serviceId } = req.params;
     const { name, description, price } = req.body;
 
-    const service = await Services.findByPk(serviceId);
+    const service = await Services.findByPk(serviceId, {
+      include: [
+        {
+          model: Users,
+          as: "user",
+          attributes: ["id", "name", "email"],
+        },
+      ],
+    });
 
     if (!service) {
       return res
@@ -35,9 +43,23 @@ const updateService = async (req, res) => {
     service.price = price || service.price;
 
     await service.save();
-    res
-      .status(200)
-      .json({ success: true, message: "Service updated successfully" });
+    
+    // Re-fetch to get updated data with user
+    const updatedService = await Services.findByPk(serviceId, {
+      include: [
+        {
+          model: Users,
+          as: "user",
+          attributes: ["id", "name", "email"],
+        },
+      ],
+    });
+    
+    res.status(200).json({ 
+      success: true, 
+      message: "Service updated successfully",
+      data: updatedService 
+    });
   } catch (error) {
     console.error("Error updating service:", error);
     res.status(500).json({ success: false, message: error.message });
