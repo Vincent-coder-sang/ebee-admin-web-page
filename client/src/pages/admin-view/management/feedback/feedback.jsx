@@ -13,7 +13,8 @@ import {
   DialogContent, 
   DialogHeader, 
   DialogTitle,
-  DialogDescription
+  DialogDescription,
+  DialogFooter
 } from "@/components/ui/dialog";
 import { 
   MdEdit, 
@@ -28,7 +29,12 @@ import {
   MdStarBorder,
   MdCheckCircle,
   MdRemoveCircle,
-  MdFilterList
+  MdFilterList,
+  MdShoppingBag,
+  MdCategory,
+  MdVisibility,
+  MdVisibilityOff,
+  MdReply
 } from "react-icons/md";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -50,24 +56,43 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   getFeedbacks,
   deleteFeedback,
   updateFeedback,
-  addFeedback
+  addFeedback,
+  getProducts
 } from '@/features/slices/feedbackSlice';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 
 const AdminFeedback = () => {
   const dispatch = useDispatch();
-  const { list: feedbacks = [], status } = useSelector((state) => state.feedbacks);
+  const { 
+    list: feedbacks = [], 
+    products = [],
+    status 
+  } = useSelector((state) => state.feedbacks);
 
   const [isDialogOpen, setDialogOpen] = useState(false);
+  const [isResponseDialogOpen, setResponseDialogOpen] = useState(false);
   const [editingFeedback, setEditingFeedback] = useState(null);
+  const [selectedFeedback, setSelectedFeedback] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState('all');
+  const [productFilter, setProductFilter] = useState('all');
+  const [ratingFilter, setRatingFilter] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [responseText, setResponseText] = useState('');
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'detail'
   
   const [formData, setFormData] = useState({
     name: '',
@@ -75,30 +100,69 @@ const AdminFeedback = () => {
     message: '',
     rating: 5,
     status: 'pending',
-    response: ''
+    response: '',
+    productId: '',
+    productName: '',
+    category: '',
+    isPublic: false
   });
 
   useEffect(() => {
     dispatch(getFeedbacks());
+    dispatch(getProducts());
   }, [dispatch]);
 
-  // Filter feedbacks based on search and filter
+  // Get unique product names from feedbacks
+  const productNames = [...new Set(feedbacks
+    .filter(f => f.productName)
+    .map(f => f.productName))];
+
+  // Filter feedbacks based on multiple criteria
   const filteredFeedbacks = feedbacks.filter(feedback => {
     if (!feedback) return false;
     
+    // Search filter
     const matchesSearch = 
-      feedback.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      feedback.email?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      feedback.message?.toLowerCase().includes(searchTerm.toLowerCase());
+      (feedback.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+       feedback.email?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+       feedback.message?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+       feedback.productName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+       feedback.category?.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    const matchesFilter = 
+    // Status filter
+    const matchesStatus = 
       filter === 'all' || 
-      feedback.status === filter ||
-      (filter === 'high_rating' && feedback.rating >= 4) ||
-      (filter === 'low_rating' && feedback.rating <= 2);
+      feedback.status === filter;
+    
+    // Product filter
+    const matchesProduct = 
+      productFilter === 'all' || 
+      feedback.productName === productFilter;
+    
+    // Rating filter
+    const matchesRating = 
+      ratingFilter === 'all' ||
+      (ratingFilter === '5_stars' && feedback.rating === 5) ||
+      (ratingFilter === '4_stars' && feedback.rating === 4) ||
+      (ratingFilter === '3_stars' && feedback.rating === 3) ||
+      (ratingFilter === '2_stars' && feedback.rating === 2) ||
+      (ratingFilter === '1_star' && feedback.rating === 1) ||
+      (ratingFilter === 'high' && feedback.rating >= 4) ||
+      (ratingFilter === 'low' && feedback.rating <= 2);
       
-    return matchesSearch && matchesFilter;
+    return matchesSearch && matchesStatus && matchesProduct && matchesRating;
   });
+
+  // Statistics
+  const stats = {
+    total: feedbacks.length,
+    pending: feedbacks.filter(f => f.status === 'pending').length,
+    reviewed: feedbacks.filter(f => f.status === 'reviewed').length,
+    resolved: feedbacks.filter(f => f.status === 'resolved').length,
+    averageRating: feedbacks.length > 0 
+      ? (feedbacks.reduce((sum, f) => sum + (f.rating || 0), 0) / feedbacks.length).toFixed(1)
+      : 0
+  };
 
   const handleEditFeedback = (feedback) => {
     setEditingFeedback(feedback);
@@ -108,9 +172,18 @@ const AdminFeedback = () => {
       message: feedback.message || '',
       rating: feedback.rating || 5,
       status: feedback.status || 'pending',
-      response: feedback.response || ''
+      response: feedback.response || '',
+      productId: feedback.productId || '',
+      productName: feedback.productName || '',
+      category: feedback.category || '',
+      isPublic: feedback.isPublic || false
     });
     setDialogOpen(true);
+  };
+
+  const handleViewFeedback = (feedback) => {
+    setSelectedFeedback(feedback);
+    setViewMode('detail');
   };
 
   const handleDeleteFeedback = async (id) => {
@@ -165,7 +238,11 @@ const AdminFeedback = () => {
       message: '',
       rating: 5,
       status: 'pending',
-      response: ''
+      response: '',
+      productId: '',
+      productName: '',
+      category: '',
+      isPublic: false
     });
     setEditingFeedback(null);
     setDialogOpen(false);
@@ -179,6 +256,43 @@ const AdminFeedback = () => {
       })).unwrap();
       dispatch(getFeedbacks());
       toast.success(`Feedback marked as ${newStatus}`);
+    } catch (error) {
+      // Toast handled in slice
+    }
+  };
+
+  const handleTogglePublic = async (feedbackId, isPublic) => {
+    try {
+      await dispatch(updateFeedback({
+        feedbackId,
+        data: { isPublic: !isPublic }
+      })).unwrap();
+      dispatch(getFeedbacks());
+      toast.success(`Feedback ${!isPublic ? 'published' : 'unpublished'}`);
+    } catch (error) {
+      // Toast handled in slice
+    }
+  };
+
+  const handleSubmitResponse = async () => {
+    if (!responseText.trim()) {
+      toast.error('Response cannot be empty');
+      return;
+    }
+
+    try {
+      await dispatch(updateFeedback({
+        feedbackId: selectedFeedback.id,
+        data: { 
+          response: responseText,
+          status: 'resolved',
+          respondedAt: new Date().toISOString()
+        }
+      })).unwrap();
+      dispatch(getFeedbacks());
+      setResponseDialogOpen(false);
+      setResponseText('');
+      toast.success('Response submitted successfully');
     } catch (error) {
       // Toast handled in slice
     }
@@ -214,213 +328,559 @@ const AdminFeedback = () => {
   // Loading state
   if (status === "pending" && feedbacks.length === 0) {
     return (
-      <div className="p-3 sm:p-4 space-y-4">
-        <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="w-40 sm:w-48 h-7 sm:h-8 bg-gray-200 rounded animate-pulse mb-2"></div>
-            <div className="w-28 sm:w-32 h-3 sm:h-4 bg-gray-200 rounded animate-pulse"></div>
-          </div>
-          <div className="w-full sm:w-32 h-9 sm:h-10 bg-gray-200 rounded animate-pulse"></div>
-        </div>
-        <div className="space-y-2 sm:space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="w-full h-16 sm:h-20 bg-gray-200 rounded animate-pulse"></div>
+      <div className="p-4 space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-lg" />
           ))}
         </div>
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-64 w-full" />
       </div>
     );
   }
 
+  // Detail View Component
+  const FeedbackDetailView = () => (
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setViewMode('list')}
+          className="gap-2"
+        >
+          ← Back to List
+        </Button>
+        <h2 className="text-xl font-bold">Feedback Details</h2>
+      </div>
+
+      <Card>
+        <CardContent className="p-6 space-y-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <h3 className="text-lg font-semibold">{selectedFeedback.name || 'Anonymous'}</h3>
+              <div className="flex items-center gap-4 mt-2">
+                <Badge variant={selectedFeedback.status === 'resolved' ? 'default' : 
+                               selectedFeedback.status === 'reviewed' ? 'secondary' : 'outline'}>
+                  {selectedFeedback.status?.toUpperCase()}
+                </Badge>
+                <div className="flex items-center gap-2">
+                  {renderStars(selectedFeedback.rating)}
+                  <span className="text-sm text-gray-500">({selectedFeedback.rating}/5)</span>
+                </div>
+                <span className="text-sm text-gray-500">
+                  {formatDate(selectedFeedback.createdAt)}
+                </span>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleEditFeedback(selectedFeedback)}
+              >
+                <MdEdit className="w-4 h-4 mr-2" />
+                Edit
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleTogglePublic(selectedFeedback.id, selectedFeedback.isPublic)}
+              >
+                {selectedFeedback.isPublic ? (
+                  <MdVisibilityOff className="w-4 h-4 mr-2" />
+                ) : (
+                  <MdVisibility className="w-4 h-4 mr-2" />
+                )}
+                {selectedFeedback.isPublic ? 'Unpublish' : 'Publish'}
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-500">Email</Label>
+              <div className="flex items-center gap-2">
+                <MdEmail className="w-4 h-4 text-gray-400" />
+                <span>{selectedFeedback.email || 'Not provided'}</span>
+              </div>
+            </div>
+            
+            {selectedFeedback.productName && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-500">Product</Label>
+                <div className="flex items-center gap-2">
+                  <MdShoppingBag className="w-4 h-4 text-gray-400" />
+                  <span>{selectedFeedback.productName}</span>
+                </div>
+              </div>
+            )}
+            
+            {selectedFeedback.category && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-500">Category</Label>
+                <div className="flex items-center gap-2">
+                  <MdCategory className="w-4 h-4 text-gray-400" />
+                  <span>{selectedFeedback.category}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-500">Feedback Message</Label>
+            <Card className="bg-gray-50">
+              <CardContent className="p-4">
+                <p className="text-gray-700 whitespace-pre-wrap">{selectedFeedback.message}</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {selectedFeedback.response ? (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-500">Your Response</Label>
+              <Card className="bg-blue-50">
+                <CardContent className="p-4">
+                  <p className="text-gray-700 whitespace-pre-wrap">{selectedFeedback.response}</p>
+                  {selectedFeedback.respondedAt && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      Responded on: {formatDate(selectedFeedback.respondedAt)}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setResponseText(selectedFeedback.response);
+                  setResponseDialogOpen(true);
+                }}
+              >
+                <MdEdit className="w-4 h-4 mr-2" />
+                Edit Response
+              </Button>
+            </div>
+          ) : (
+            <Button
+              onClick={() => setResponseDialogOpen(true)}
+              className="gap-2"
+            >
+              <MdReply className="w-4 h-4" />
+              Add Response
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+
   return (
-    <div className="p-3 sm:p-4 space-y-4 sm:space-y-6">
+    <div className="p-4 space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold">Feedback Management</h1>
-          <p className="text-sm sm:text-base text-gray-600">
-            {filteredFeedbacks.length} {filteredFeedbacks.length === 1 ? 'feedback' : 'feedbacks'} found
+          <h1 className="text-2xl font-bold">Product Feedback Management</h1>
+          <p className="text-gray-600">
+            Manage and respond to customer feedback about products
           </p>
         </div>
         <Button 
           onClick={() => setDialogOpen(true)}
-          className="w-full sm:w-auto gap-2"
+          className="gap-2 w-full md:w-auto"
         >
           <MdAdd className="w-4 h-4" />
-          <span className="text-xs sm:text-sm">Add Feedback</span>
+          Add Testimonial
         </Button>
       </div>
 
-      {/* Search and Filter */}
-      <div className="space-y-3 sm:space-y-4">
-        <div className="relative">
-          <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />
-          <Input
-            placeholder="Search feedback..."
-            className="pl-8 sm:pl-9 text-sm sm:text-base h-9 sm:h-10"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        
-        {/* Mobile Filter Dropdown */}
-        <div className="block sm:hidden">
-          <div className="flex gap-2">
-            <Select value={filter} onValueChange={setFilter}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Filter feedback" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Feedback</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="reviewed">Reviewed</SelectItem>
-                <SelectItem value="resolved">Resolved</SelectItem>
-                <SelectItem value="high_rating">High Rating (4-5)</SelectItem>
-                <SelectItem value="low_rating">Low Rating (1-2)</SelectItem>
-              </SelectContent>
-            </Select>
-            
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setShowFilters(!showFilters)}
-              className="flex-shrink-0"
-            >
-              <MdFilterList className="w-4 h-4" />
-            </Button>
-          </div>
-          
-          {/* Expandable filters on mobile */}
-          {showFilters && (
-            <div className="mt-2 flex flex-wrap gap-1">
-              {[
-                { value: 'all', label: 'All' },
-                { value: 'pending', label: 'Pending' },
-                { value: 'reviewed', label: 'Reviewed' },
-                { value: 'resolved', label: 'Resolved' },
-                { value: 'high_rating', label: 'High Rating' },
-                { value: 'low_rating', label: 'Low Rating' }
-              ].map((filterType) => (
-                <Button
-                  key={filterType.value}
-                  variant={filter === filterType.value ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => {
-                    setFilter(filterType.value);
-                    setShowFilters(false);
-                  }}
-                  className="text-xs h-7 px-2"
-                >
-                  {filterType.label}
-                </Button>
-              ))}
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Feedback</p>
+                <p className="text-2xl font-bold">{stats.total}</p>
+              </div>
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <MdMessage className="w-6 h-6 text-blue-600" />
+              </div>
             </div>
-          )}
-        </div>
+          </CardContent>
+        </Card>
         
-        {/* Desktop Filter Buttons */}
-        <div className="hidden sm:flex gap-2 overflow-x-auto pb-2">
-          {[
-            { value: 'all', label: 'All Feedback' },
-            { value: 'pending', label: 'Pending' },
-            { value: 'reviewed', label: 'Reviewed' },
-            { value: 'resolved', label: 'Resolved' },
-            { value: 'high_rating', label: 'High Rating (4-5)' },
-            { value: 'low_rating', label: 'Low Rating (1-2)' }
-          ].map((filterType) => (
-            <Button
-              key={filterType.value}
-              variant={filter === filterType.value ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilter(filterType.value)}
-              className="whitespace-nowrap text-xs sm:text-sm"
-            >
-              {filterType.label}
-            </Button>
-          ))}
-        </div>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Average Rating</p>
+                <p className="text-2xl font-bold">{stats.averageRating}/5</p>
+              </div>
+              <div className="p-2 bg-yellow-100 rounded-lg">
+                <MdStar className="w-6 h-6 text-yellow-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Pending Review</p>
+                <p className="text-2xl font-bold">{stats.pending}</p>
+              </div>
+              <div className="p-2 bg-red-100 rounded-lg">
+                <MdRemoveCircle className="w-6 h-6 text-red-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Resolved</p>
+                <p className="text-2xl font-bold">{stats.resolved}</p>
+              </div>
+              <div className="p-2 bg-green-100 rounded-lg">
+                <MdCheckCircle className="w-6 h-6 text-green-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Detail View */}
+      {viewMode === 'detail' && selectedFeedback && (
+        <FeedbackDetailView />
+      )}
+
+      {/* List View */}
+      {viewMode === 'list' && (
+        <>
+          {/* Search and Filters */}
+          <Card>
+            <CardContent className="p-4 space-y-4">
+              <div className="relative">
+                <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <Input
+                  placeholder="Search feedback by customer, product, or message..."
+                  className="pl-10"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm">Status</Label>
+                  <Select value={filter} onValueChange={setFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Filter by status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="reviewed">Reviewed</SelectItem>
+                      <SelectItem value="resolved">Resolved</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label className="text-sm">Product</Label>
+                  <Select value={productFilter} onValueChange={setProductFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Filter by product" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Products</SelectItem>
+                      {productNames.map(product => (
+                        <SelectItem key={product} value={product}>{product}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label className="text-sm">Rating</Label>
+                  <Select value={ratingFilter} onValueChange={setRatingFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Filter by rating" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Ratings</SelectItem>
+                      <SelectItem value="5_stars">5 Stars</SelectItem>
+                      <SelectItem value="4_stars">4 Stars</SelectItem>
+                      <SelectItem value="3_stars">3 Stars</SelectItem>
+                      <SelectItem value="2_stars">2 Stars</SelectItem>
+                      <SelectItem value="1_star">1 Star</SelectItem>
+                      <SelectItem value="high">High (4-5)</SelectItem>
+                      <SelectItem value="low">Low (1-2)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="flex items-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setFilter('all');
+                      setProductFilter('all');
+                      setRatingFilter('all');
+                      setSearchTerm('');
+                    }}
+                    className="w-full"
+                  >
+                    Clear Filters
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Feedback Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Customer Feedback</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {filteredFeedbacks.length === 0 ? (
+                <div className="text-center py-12">
+                  <MdMessage className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-600">No feedback found</h3>
+                  <p className="text-gray-500 mt-2">
+                    {searchTerm || filter !== 'all' || productFilter !== 'all' 
+                      ? 'Try adjusting your search or filter criteria' 
+                      : 'No feedback has been submitted yet'
+                    }
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Product</TableHead>
+                        <TableHead>Rating</TableHead>
+                        <TableHead>Message</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredFeedbacks.map((feedback) => (
+                        <TableRow key={feedback.id}>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{feedback.name || 'Anonymous'}</p>
+                              {feedback.email && (
+                                <p className="text-sm text-gray-500">{feedback.email}</p>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {feedback.productName ? (
+                              <div className="flex items-center gap-2">
+                                <MdShoppingBag className="w-4 h-4 text-gray-400" />
+                                <span>{feedback.productName}</span>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">N/A</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {renderStars(feedback.rating)}
+                              <span className="text-sm">({feedback.rating})</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <p className="max-w-xs truncate">{feedback.message}</p>
+                          </TableCell>
+                          <TableCell>
+                            <Badge 
+                              variant={feedback.status === 'resolved' ? 'default' : 
+                                      feedback.status === 'reviewed' ? 'secondary' : 'outline'}
+                            >
+                              {feedback.status}
+                            </Badge>
+                            {feedback.isPublic && (
+                              <Badge variant="outline" className="ml-2 bg-green-50">
+                                Public
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-gray-500">
+                              {formatDate(feedback.createdAt)}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleViewFeedback(feedback)}
+                              >
+                                View
+                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm">
+                                    •••
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleEditFeedback(feedback)}>
+                                    <MdEdit className="mr-2 h-4 w-4" />
+                                    Edit
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setResponseDialogOpen(true)}>
+                                    <MdReply className="mr-2 h-4 w-4" />
+                                    {feedback.response ? 'Edit Response' : 'Add Response'}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem 
+                                    onClick={() => handleTogglePublic(feedback.id, feedback.isPublic)}
+                                  >
+                                    {feedback.isPublic ? (
+                                      <>
+                                        <MdVisibilityOff className="mr-2 h-4 w-4" />
+                                        Unpublish
+                                      </>
+                                    ) : (
+                                      <>
+                                        <MdVisibility className="mr-2 h-4 w-4" />
+                                        Publish
+                                      </>
+                                    )}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem 
+                                    onClick={() => handleDeleteFeedback(feedback.id)}
+                                    className="text-red-600"
+                                  >
+                                    <MdDelete className="mr-2 h-4 w-4" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
 
       {/* Add/Edit Feedback Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md max-w-[95vw] mx-2">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="text-lg sm:text-xl">
-              {editingFeedback ? 'Edit Feedback' : 'Add New Feedback'}
+            <DialogTitle>
+              {editingFeedback ? 'Edit Product Feedback' : 'Add New Testimonial'}
             </DialogTitle>
             <DialogDescription>
-              {editingFeedback ? 'Update feedback details' : 'Add new customer feedback'}
+              {editingFeedback ? 'Update feedback details' : 'Add customer feedback for a product'}
             </DialogDescription>
           </DialogHeader>
           
-          <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
-            <div className="space-y-1 sm:space-y-2">
-              <Label htmlFor="name" className="text-sm sm:text-base">Name</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="Customer name"
-                disabled={isSubmitting}
-                className="text-sm sm:text-base h-9 sm:h-10"
-              />
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Customer Name</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="John Doe"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                  placeholder="customer@example.com"
+                />
+              </div>
             </div>
 
-            <div className="space-y-1 sm:space-y-2">
-              <Label htmlFor="email" className="text-sm sm:text-base">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                placeholder="customer@example.com"
-                disabled={isSubmitting}
-                className="text-sm sm:text-base h-9 sm:h-10"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="productName">Product Name</Label>
+                <Input
+                  id="productName"
+                  value={formData.productName}
+                  onChange={(e) => setFormData(prev => ({ ...prev, productName: e.target.value }))}
+                  placeholder="Product Name"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="category">Product Category</Label>
+                <Input
+                  id="category"
+                  value={formData.category}
+                  onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+                  placeholder="Category"
+                />
+              </div>
             </div>
 
-            <div className="space-y-1 sm:space-y-2">
-              <Label htmlFor="message" className="text-sm sm:text-base">Feedback Message</Label>
+            <div className="space-y-2">
+              <Label htmlFor="message">Feedback Message</Label>
               <Textarea
                 id="message"
                 value={formData.message}
                 onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
-                placeholder="Enter feedback message"
-                rows={3}
+                placeholder="Customer's feedback about the product..."
+                rows={4}
                 required
-                disabled={isSubmitting}
-                className="text-sm sm:text-base resize-none"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1 sm:space-y-2">
-                <Label htmlFor="rating" className="text-sm sm:text-base">Rating</Label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="rating">Rating</Label>
                 <Select 
                   value={formData.rating.toString()} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, rating: parseInt(value) }))}
-                  disabled={isSubmitting}
                 >
-                  <SelectTrigger className="text-sm sm:text-base h-9 sm:h-10">
+                  <SelectTrigger>
                     <SelectValue placeholder="Select rating" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="5">★★★★★ (5)</SelectItem>
-                    <SelectItem value="4">★★★★☆ (4)</SelectItem>
-                    <SelectItem value="3">★★★☆☆ (3)</SelectItem>
-                    <SelectItem value="2">★★☆☆☆ (2)</SelectItem>
-                    <SelectItem value="1">★☆☆☆☆ (1)</SelectItem>
+                    <SelectItem value="5">★★★★★ Excellent</SelectItem>
+                    <SelectItem value="4">★★★★☆ Very Good</SelectItem>
+                    <SelectItem value="3">★★★☆☆ Good</SelectItem>
+                    <SelectItem value="2">★★☆☆☆ Fair</SelectItem>
+                    <SelectItem value="1">★☆☆☆☆ Poor</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="space-y-1 sm:space-y-2">
-                <Label htmlFor="status" className="text-sm sm:text-base">Status</Label>
+              <div className="space-y-2">
+                <Label htmlFor="status">Status</Label>
                 <Select 
                   value={formData.status} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}
-                  disabled={isSubmitting}
                 >
-                  <SelectTrigger className="text-sm sm:text-base h-9 sm:h-10">
+                  <SelectTrigger>
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -430,244 +890,74 @@ const AdminFeedback = () => {
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="isPublic">Visibility</Label>
+                <Select 
+                  value={formData.isPublic.toString()} 
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, isPublic: value === 'true' }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select visibility" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Public (Visible to all)</SelectItem>
+                    <SelectItem value="false">Private (Admin only)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {editingFeedback && (
-              <div className="space-y-1 sm:space-y-2">
-                <Label htmlFor="response" className="text-sm sm:text-base">Admin Response</Label>
+              <div className="space-y-2">
+                <Label htmlFor="response">Admin Response</Label>
                 <Textarea
                   id="response"
                   value={formData.response}
                   onChange={(e) => setFormData(prev => ({ ...prev, response: e.target.value }))}
-                  placeholder="Enter your response..."
-                  rows={2}
-                  disabled={isSubmitting}
-                  className="text-sm sm:text-base resize-none"
+                  placeholder="Your response to the customer..."
+                  rows={3}
                 />
               </div>
             )}
 
-            <div className="flex gap-2 pt-2">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={handleCloseDialog}
-                className="flex-1 text-sm sm:text-base h-9 sm:h-10"
-                disabled={isSubmitting}
-              >
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={handleCloseDialog}>
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
-                className="flex-1 text-sm sm:text-base h-9 sm:h-10"
-                disabled={isSubmitting}
-              >
+              <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? 'Saving...' : editingFeedback ? 'Update Feedback' : 'Add Feedback'}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Feedback List */}
-      <div className="space-y-2 sm:space-y-4">
-        {filteredFeedbacks.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-8 sm:py-12 text-center">
-              <MdMessage className="w-8 h-8 sm:w-12 sm:h-12 text-gray-300 mb-2 sm:mb-4" />
-              <h3 className="text-base sm:text-lg font-medium text-gray-600">No feedback found</h3>
-              <p className="text-sm text-gray-500 mt-1">
-                {searchTerm || filter !== 'all' 
-                  ? 'Try adjusting your search or filter criteria' 
-                  : 'No feedback submitted yet'
-                }
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          filteredFeedbacks.map((feedback) => (
-            <Card key={feedback.id} className="p-3 sm:p-4 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0 space-y-1 sm:space-y-2">
-                  {/* Header with name, rating, and date */}
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
-                        <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
-                          {feedback.name || 'Anonymous'}
-                        </h3>
-                        <Badge 
-                          variant="outline"
-                          className={`text-xs px-1.5 py-0.5 ${
-                            feedback.status === 'resolved' ? 'bg-green-50 text-green-700 border-green-200' :
-                            feedback.status === 'reviewed' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                            'bg-yellow-50 text-yellow-700 border-yellow-200'
-                          }`}
-                        >
-                          {feedback.status?.charAt(0).toUpperCase() + feedback.status?.slice(1) || 'Pending'}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        {renderStars(feedback.rating || 0)}
-                        <span className="text-xs text-gray-500">
-                          {formatDate(feedback.createdAt)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Email */}
-                  {feedback.email && (
-                    <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-600">
-                      <MdEmail className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                      <span className="truncate">{feedback.email}</span>
-                    </div>
-                  )}
-                  
-                  {/* Feedback Message */}
-                  <div className="pt-1">
-                    <p className="text-sm text-gray-700 line-clamp-2">
-                      {feedback.message}
-                    </p>
-                  </div>
-                  
-                  {/* Admin Response (if exists) */}
-                  {feedback.response && (
-                    <div className="pt-2 border-t">
-                      <div className="flex items-start gap-2">
-                        <div className="flex-shrink-0 mt-1">
-                          <Badge variant="outline" className="text-xs bg-gray-50">
-                            Response
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-gray-600 flex-1">
-                          {feedback.response}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Action Buttons - Desktop */}
-                <div className="hidden sm:flex gap-1 ml-4 flex-shrink-0">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleEditFeedback(feedback)}
-                    title="Edit Feedback"
-                    className="h-8 w-8 p-0"
-                  >
-                    <MdEdit className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleDeleteFeedback(feedback.id)}
-                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                    title="Delete Feedback"
-                  >
-                    <MdDelete className="w-4 h-4" />
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon" className="h-8 w-8">
-                        <MdCheckCircle className="w-4 h-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem onClick={() => handleUpdateStatus(feedback.id, 'reviewed')}>
-                        <MdCheckCircle className="mr-2 h-4 w-4 text-blue-600" />
-                        <span>Mark as Reviewed</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleUpdateStatus(feedback.id, 'resolved')}>
-                        <MdCheckCircle className="mr-2 h-4 w-4 text-green-600" />
-                        <span>Mark as Resolved</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleUpdateStatus(feedback.id, 'pending')}>
-                        <MdRemoveCircle className="mr-2 h-4 w-4 text-yellow-600" />
-                        <span>Mark as Pending</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                
-                {/* Action Menu - Mobile */}
-                <div className="block sm:hidden ml-2 flex-shrink-0">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MdFilterList className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem onClick={() => handleEditFeedback(feedback)}>
-                        <MdEdit className="mr-2 h-4 w-4" />
-                        <span>Edit Feedback</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleUpdateStatus(feedback.id, 'reviewed')}>
-                        <MdCheckCircle className="mr-2 h-4 w-4 text-blue-600" />
-                        <span>Mark as Reviewed</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleUpdateStatus(feedback.id, 'resolved')}>
-                        <MdCheckCircle className="mr-2 h-4 w-4 text-green-600" />
-                        <span>Mark as Resolved</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleUpdateStatus(feedback.id, 'pending')}>
-                        <MdRemoveCircle className="mr-2 h-4 w-4 text-yellow-600" />
-                        <span>Mark as Pending</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem 
-                        onClick={() => handleDeleteFeedback(feedback.id)}
-                        className="text-red-600 focus:text-red-600"
-                      >
-                        <MdDelete className="mr-2 h-4 w-4" />
-                        <span>Delete Feedback</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-              
-              {/* Quick Actions - Mobile */}
-              <div className="flex sm:hidden gap-2 mt-3 pt-3 border-t">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleEditFeedback(feedback)}
-                  className="flex-1 text-xs h-8"
-                >
-                  <MdEdit className="w-3 h-3 mr-1" />
-                  Edit
-                </Button>
-                <Button
-                  size="sm"
-                  variant="default"
-                  onClick={() => handleUpdateStatus(feedback.id, 'reviewed')}
-                  className="flex-1 text-xs h-8"
-                >
-                  <MdCheckCircle className="w-3 h-3 mr-1" />
-                  Review
-                </Button>
-              </div>
-            </Card>
-          ))
-        )}
-      </div>
-
-      {/* Refresh Button */}
-      <div className="flex justify-center pt-4">
-        <Button 
-          onClick={refreshFeedbacks}
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          disabled={status === "pending"}
-        >
-          <MdRefresh className={`w-4 h-4 ${status === "pending" ? 'animate-spin' : ''}`} />
-          Refresh Feedback
-        </Button>
-      </div>
+      {/* Response Dialog */}
+      <Dialog open={isResponseDialogOpen} onOpenChange={setResponseDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Response</DialogTitle>
+            <DialogDescription>
+              Respond to customer feedback. This will also mark the feedback as resolved.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={responseText}
+            onChange={(e) => setResponseText(e.target.value)}
+            placeholder="Type your response here..."
+            rows={4}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResponseDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmitResponse}>
+              Submit Response
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
