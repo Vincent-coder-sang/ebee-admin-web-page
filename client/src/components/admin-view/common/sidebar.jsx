@@ -13,7 +13,8 @@ import {
   Menu,
   X,
   FolderKanban,
-  ChevronDown
+  ChevronDown,
+  AlertTriangle
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -91,6 +92,20 @@ const menuItems = [
     icon: <FolderKanban className="h-5 w-5 flex-shrink-0" />,
     category: "management"
   },
+   {
+    id: "rentals",
+    label: "Rentals",
+    path: "/admin/rentals",
+    icon: <FolderKanban className="h-5 w-5 flex-shrink-0" />,
+    category: "management"
+  },
+   {
+    id: "dispatch",
+    label: "Dispatch",
+    path: "/admin/dispatch",
+    icon: <FolderKanban className="h-5 w-5 flex-shrink-0" />,
+    category: "management"
+  },
   {
     id: "services",
     label: "Services",
@@ -98,6 +113,14 @@ const menuItems = [
     icon: <Wrench className="h-5 w-5 flex-shrink-0" />,
     category: "management"
   },
+  // Add this to your menuItems array, in the 'management' section:
+{
+  id: "fines",
+  label: "Fines Management",
+  path: "/admin/fines",
+  icon: <AlertTriangle className="h-5 w-5 flex-shrink-0" />, // You'll need to import AlertTriangle
+  category: "management"
+},
   {
     id: "payments",
     label: "Payments",

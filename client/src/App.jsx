@@ -23,12 +23,15 @@ import AdminReports from "./pages/admin-view/reports/reports";
 import AdminHelpAndSupport from "./pages/admin-view/management/helpAndSupport/help-and-support";
 import AdminPayments from "./pages/admin-view/management/payments/payments";
 import ResetPassword from "./pages/auth/password-reset";
-import AdminBookings from "./pages/admin-view/bookings/bookings";
+import AdminBookings from "./pages/admin-view/management/bookings/bookings";
 import AdminServices from "./pages/admin-view/management/services/services";
 import Adminsalesmanagement from "./pages/admin-view/management/sales/sales";
 import OrderReports from "./pages/admin-view/reports/order-reports";
 import ServiceBookingReports from "./pages/admin-view/reports/service-booking-reports";
 import PurchaseOrdersReport from "./pages/admin-view/reports/purchase-order-reports";
+import AdminFines from "./pages/admin-view/management/fines/fines";
+import AdminRentals from "./pages/admin-view/management/rentals/rentals";
+import AdminDispatch from "./pages/admin-view/management/dispatch/dispatch";
 // CustomReports has been removed as it's not aligned with the new system
 
 const App = ({ isAuthenticated, user }) => {
@@ -124,6 +127,9 @@ const App = ({ isAuthenticated, user }) => {
           <Route path="services" element={<AdminServices />} />
           <Route path="bookings" element={<AdminBookings />} />
           <Route path="sales" element={<Adminsalesmanagement />} />
+          <Route path="fines" element={<AdminFines />} />
+          <Route path="rentals" element={<AdminRentals />} />
+          <Route path="dispatch" element={<AdminDispatch />} />
           <Route path="help-support" element={<AdminHelpAndSupport />} />
         </Route>
 
