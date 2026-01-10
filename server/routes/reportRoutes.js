@@ -1,38 +1,36 @@
+// server/routes/reportRoutes.js
 /** @format */
 
 const express = require("express");
 const router = express.Router();
 const {
-	getReport,
-	getReportById,
-	generateSalesReport,
-	generateInventoryReport,
-	generateFeedbackReport,
-	generateCustomReport,
-	downloadReport,
-	deleteReport,
-	getReportStats
+  getReport,
+  getReportById,
+  generateSalesReport,
+  generateInventoryReport,
+  generateFeedbackReport,
+  generateCustomReport,
+  downloadReport,
+  deleteReport,
+  getReportStats,
+  createReport
 } = require("../controllers/reportController");
-
-// Authentication middleware
-const { authenticate, authorize } = require("../middleware/authMiddleware");
-
-// Apply authentication to all routes
-router.use(authenticate);
+const { verifyToken } = require("../middlewares/AuthMiddleware");
 
 // Basic report routes
-router.get("/get", authorize(['admin', 'manager']), getReport);
-router.get("/get/:id", authorize(['admin', 'manager']), getReportById);
-router.delete("/delete/:id", authorize(['admin']), deleteReport);
+router.get("/get", verifyToken, getReport);
+router.get("/get/:reportId", verifyToken, getReportById);
+router.delete("/delete/:reportId", verifyToken, deleteReport);
+router.post("/create", verifyToken, createReport); // Added this
 
 // Report generation routes
-router.post("/generate/sales", authorize(['admin', 'manager']), generateSalesReport);
-router.post("/generate/inventory", authorize(['admin', 'manager']), generateInventoryReport);
-router.post("/generate/feedback", authorize(['admin', 'manager']), generateFeedbackReport);
-router.post("/generate/custom", authorize(['admin', 'manager']), generateCustomReport);
+router.post("/generate/sales", verifyToken, generateSalesReport);
+router.post("/generate/inventory", verifyToken, generateInventoryReport);
+router.post("/generate/feedback", verifyToken, generateFeedbackReport);
+router.post("/generate/custom", verifyToken, generateCustomReport);
 
 // Download and stats
-router.get("/download/:filename", authorize(['admin', 'manager']), downloadReport);
-router.get("/stats", authorize(['admin', 'manager']), getReportStats);
+router.get("/download/:filename", verifyToken, downloadReport);
+router.get("/stats", verifyToken, getReportStats);
 
 module.exports = router;
