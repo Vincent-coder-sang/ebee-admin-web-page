@@ -31,44 +31,55 @@ import { fetchServices } from "@/features/slices/serviceSlice";
 const AdminDashboard = () => {
   const dispatch = useDispatch();
 
-  // Enhanced selectors with error handling
+  // Enhanced selectors with status instead of loading
   const { 
     list: products = [], 
-    loading: productsLoading,
+    status: productsStatus,
     error: productsError 
   } = useSelector((state) => state.products);
   
   const { 
     list: orders = [], 
-    loading: ordersLoading,
+    status: ordersStatus,
     error: ordersError 
   } = useSelector((state) => state.orders);
   
   const { 
     list: users = [], 
-    loading: usersLoading,
+    status: usersStatus,
     error: usersError 
   } = useSelector((state) => state.users);
   
   const { 
     list: services = [], 
-    loading: servicesLoading,
+    status: servicesStatus,
     error: servicesError 
   } = useSelector((state) => state.services);
   
-  // Combined loading state
-  const isLoading = productsLoading || ordersLoading || usersLoading || servicesLoading;
+  // Combined loading state based on status
+  const isLoading = 
+    productsStatus === 'pending' || 
+    ordersStatus === 'pending' || 
+    usersStatus === 'pending' || 
+    servicesStatus === 'pending';
   
   // Combined error state
   const hasError = productsError || ordersError || usersError || servicesError;
 
+  // Check if any fetch has failed
+  const hasFetchError = 
+    productsStatus === 'rejected' || 
+    ordersStatus === 'rejected' || 
+    usersStatus === 'rejected' || 
+    servicesStatus === 'rejected';
+
   useEffect(() => {
-    // Fetch data on component mount
-    dispatch(fetchProducts());
-    dispatch(fetchOrders());
-    dispatch(fetchUsers());
-    dispatch(fetchServices());
-  }, [dispatch]);
+    // Fetch data on component mount only if not already loading
+    if (productsStatus === 'idle') dispatch(fetchProducts());
+    if (ordersStatus === 'idle') dispatch(fetchOrders());
+    if (usersStatus === 'idle') dispatch(fetchUsers());
+    if (servicesStatus === 'idle') dispatch(fetchServices());
+  }, [dispatch, productsStatus, ordersStatus, usersStatus, servicesStatus]);
 
   // Handle refresh with loading states
   const handleRefresh = () => {
@@ -94,24 +105,19 @@ const AdminDashboard = () => {
     return revenue / orders.length;
   };
 
-  // Format currency
+  // Format currency in Kenyan Shillings (KES)
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
-  };
-
-  // Format KES currency
-  const formatKES = (amount) => {
     return new Intl.NumberFormat('en-KE', {
       style: 'currency',
       currency: 'KES',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
+  };
+
+  // Format KES currency (kept for compatibility)
+  const formatKES = (amount) => {
+    return formatCurrency(amount);
   };
 
   // Stats data including services
@@ -123,7 +129,7 @@ const AdminDashboard = () => {
       color: "text-blue-600",
       bgColor: "bg-blue-100",
       description: "Registered users",
-      loading: usersLoading
+      loading: usersStatus === 'pending'
     },
     {
       title: "Total Products",
@@ -132,7 +138,7 @@ const AdminDashboard = () => {
       color: "text-green-600",
       bgColor: "bg-green-100",
       description: "Available products",
-      loading: productsLoading
+      loading: productsStatus === 'pending'
     },
     {
       title: "Total Services",
@@ -141,7 +147,7 @@ const AdminDashboard = () => {
       color: "text-purple-600",
       bgColor: "bg-purple-100",
       description: "Active services",
-      loading: servicesLoading
+      loading: servicesStatus === 'pending'
     },
     {
       title: "Total Orders",
@@ -150,7 +156,7 @@ const AdminDashboard = () => {
       color: "text-amber-600",
       bgColor: "bg-amber-100",
       description: "All-time orders",
-      loading: ordersLoading
+      loading: ordersStatus === 'pending'
     },
     {
       title: "Total Revenue",
@@ -159,7 +165,7 @@ const AdminDashboard = () => {
       color: "text-emerald-600",
       bgColor: "bg-emerald-100",
       description: "Gross revenue",
-      loading: ordersLoading
+      loading: ordersStatus === 'pending'
     },
     {
       title: "Avg Order Value",
@@ -168,7 +174,7 @@ const AdminDashboard = () => {
       color: "text-indigo-600",
       bgColor: "bg-indigo-100",
       description: "Average per order",
-      loading: ordersLoading
+      loading: ordersStatus === 'pending'
     }
   ];
 
@@ -208,7 +214,7 @@ const AdminDashboard = () => {
     );
   };
 
-  if (isLoading) {
+  if (isLoading && products.length === 0 && orders.length === 0 && users.length === 0 && services.length === 0) {
     return (
       <div className="p-4 space-y-6">
         {/* Header Skeleton */}
@@ -260,7 +266,7 @@ const AdminDashboard = () => {
     );
   }
 
-  if (hasError) {
+  if (hasFetchError) {
     return (
       <div className="p-4">
         <Card className="border-red-200">
@@ -268,7 +274,9 @@ const AdminDashboard = () => {
             <div className="text-center">
               <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">Error Loading Data</h3>
-              <p className="text-gray-600 mb-4">There was an issue fetching dashboard data.</p>
+              <p className="text-gray-600 mb-4">
+                {hasError || "There was an issue fetching dashboard data. Some data may be incomplete."}
+              </p>
               <Button onClick={handleRefresh} variant="outline">
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Retry
@@ -323,7 +331,9 @@ const AdminDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="text-lg sm:text-xl lg:text-2xl font-bold mb-1 truncate">
-                {stat.loading ? '...' : stat.value}
+                {stat.loading ? (
+                  <div className="h-6 w-20 bg-gray-200 animate-pulse rounded"></div>
+                ) : stat.value}
               </div>
               <p className="text-xs text-gray-500 truncate">
                 {stat.description}
@@ -333,213 +343,221 @@ const AdminDashboard = () => {
         ))}
       </div>
 
-      {/* Recent Activity */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Recent Orders */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base sm:text-lg">Recent Orders</CardTitle>
-            <Button 
-              variant="ghost" 
-              size="sm"
-              className="text-xs sm:text-sm"
-            >
-              <Eye className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-              View All
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {recentOrders.length === 0 ? (
-              <div className="text-center py-4 sm:py-8 text-gray-500">
-                <ShoppingCart className="w-8 h-8 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-4 text-gray-300" />
-                <p className="text-sm sm:text-base">No orders yet</p>
-              </div>
-            ) : (
-              <div className="space-y-2 sm:space-y-3">
-                {recentOrders.map((order) => (
-                  <div 
-                    key={order.id} 
-                    className="flex flex-col sm:flex-row sm:items-center justify-between p-2 sm:p-3 border rounded-lg hover:bg-gray-50 transition-colors gap-2 sm:gap-0"
-                  >
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <div className={`p-1 sm:p-2 rounded-full flex-shrink-0 ${
-                        order.orderStatus === 'completed' ? 'bg-green-100' : 
-                        order.orderStatus === 'pending' ? 'bg-yellow-100' : 'bg-red-100'
-                      }`}>
-                        <ShoppingCart className={`w-3 h-3 sm:w-4 sm:h-4 ${
-                          order.orderStatus === 'completed' ? 'text-green-600' : 
-                          order.orderStatus === 'pending' ? 'text-yellow-600' : 'text-red-600'
-                        }`} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm sm:text-base truncate">
-                          Order #{order.id?.slice(-8) || order.id || 'N/A'}
-                        </p>
-                        <p className="text-xs sm:text-sm text-gray-600 truncate">
-                          {order.user?.name || order.user?.email || "Customer"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex justify-between sm:flex-col sm:text-right sm:items-end">
-                      <p className="font-medium text-sm sm:text-base">
-                        {formatCurrency(order.totalPrice || 0)}
-                      </p>
-                      <Badge 
-                        variant="outline"
-                        className={`text-xs ${
-                          order.orderStatus === 'completed' ? 'bg-green-50 text-green-700 border-green-200' : 
-                          order.orderStatus === 'pending' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 
-                          'bg-red-50 text-red-700 border-red-200'
-                        }`}
-                      >
-                        {order.orderStatus || 'pending'}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Recent Services */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base sm:text-lg">Recent Services</CardTitle>
-            <Button 
-              variant="ghost" 
-              size="sm"
-              className="text-xs sm:text-sm"
-            >
-              <Eye className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-              View All
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {recentServices.length === 0 ? (
-              <div className="text-center py-4 sm:py-8 text-gray-500">
-                <Wrench className="w-8 h-8 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-4 text-gray-300" />
-                <p className="text-sm sm:text-base">No services yet</p>
-                <p className="text-xs sm:text-sm mt-1 sm:mt-2">Add your first service to get started</p>
-              </div>
-            ) : (
-              <div className="space-y-2 sm:space-y-3">
-                {recentServices.map((service) => (
-                  <div 
-                    key={service.id} 
-                    className="flex flex-col sm:flex-row sm:items-center justify-between p-2 sm:p-3 border rounded-lg hover:bg-gray-50 transition-colors gap-2 sm:gap-0"
-                  >
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <div className="p-1 sm:p-2 rounded-full bg-purple-100 flex-shrink-0">
-                        <Wrench className="w-3 h-3 sm:w-4 sm:h-4 text-purple-600" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm sm:text-base truncate">{service.name}</p>
-                        <p className="text-xs sm:text-sm text-gray-600 line-clamp-1">
-                          {service.description || "No description"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex justify-between sm:flex-col sm:text-right sm:items-end">
-                      <p className="font-medium text-sm sm:text-base">
-                        {service.price ? formatKES(service.price) : "N/A"}
-                      </p>
-                      {service.user && (
-                        <p className="text-xs text-gray-500 truncate max-w-[120px] sm:max-w-none">
-                          by {service.user.name || service.user.email}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base sm:text-lg">Popular Products</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {products.slice(0, 4).length === 0 ? (
-              <div className="text-center py-4 text-gray-500">
-                <Package className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                <p className="text-sm sm:text-base">No products available</p>
-              </div>
-            ) : (
-              <div className="space-y-2 sm:space-y-3">
-                {products.slice(0, 4).map((product) => (
-                  <div 
-                    key={product.id} 
-                    className="flex items-center justify-between py-2 border-b last:border-0"
-                  >
-                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <Package className="w-3 h-3 sm:w-5 sm:h-5 text-gray-600" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm sm:text-base truncate">{product.name}</p>
-                        <p className="text-xs sm:text-sm text-gray-600">
-                          {formatCurrency(product.price || 0)}
-                        </p>
-                      </div>
-                    </div>
-                    <Badge 
-                      variant="outline"
-                      className={`text-xs px-2 py-1 ${
-                        (product.stockQuantity || 0) > 10 ? 'bg-green-50 text-green-700 border-green-200' : 
-                        (product.stockQuantity || 0) > 0 ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 
-                        'bg-red-50 text-red-700 border-red-200'
-                      }`}
+      {/* Recent Activity - Only show if data is available */}
+      {(recentOrders.length > 0 || recentServices.length > 0) && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* Recent Orders */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base sm:text-lg">Recent Orders</CardTitle>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                className="text-xs sm:text-sm"
+              >
+                <Eye className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                View All
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {recentOrders.length === 0 ? (
+                <div className="text-center py-4 sm:py-8 text-gray-500">
+                  <ShoppingCart className="w-8 h-8 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-4 text-gray-300" />
+                  <p className="text-sm sm:text-base">No orders yet</p>
+                </div>
+              ) : (
+                <div className="space-y-2 sm:space-y-3">
+                  {recentOrders.map((order) => (
+                    <div 
+                      key={order.id} 
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-2 sm:p-3 border rounded-lg hover:bg-gray-50 transition-colors gap-2 sm:gap-0"
                     >
-                      Stock: {product.stockQuantity || 0}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base sm:text-lg">Recent Users</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {users.slice(0, 4).length === 0 ? (
-              <div className="text-center py-4 text-gray-500">
-                <Users className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                <p className="text-sm sm:text-base">No users registered</p>
-              </div>
-            ) : (
-              <div className="space-y-2 sm:space-y-3">
-                {users.slice(0, 4).map((user) => (
-                  <div 
-                    key={user.id} 
-                    className="flex items-center justify-between py-2 border-b last:border-0"
-                  >
-                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
-                        <Users className="w-3 h-3 sm:w-5 sm:h-5 text-gray-600" />
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <div className={`p-1 sm:p-2 rounded-full flex-shrink-0 ${
+                          order.orderStatus === 'completed' ? 'bg-green-100' : 
+                          order.orderStatus === 'pending' ? 'bg-yellow-100' : 'bg-red-100'
+                        }`}>
+                          <ShoppingCart className={`w-3 h-3 sm:w-4 sm:h-4 ${
+                            order.orderStatus === 'completed' ? 'text-green-600' : 
+                            order.orderStatus === 'pending' ? 'text-yellow-600' : 'text-red-600'
+                          }`} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm sm:text-base truncate">
+                            Order #{order.id?.slice(-8) || order.id || 'N/A'}
+                          </p>
+                          <p className="text-xs sm:text-sm text-gray-600 truncate">
+                            {order.user?.name || order.user?.email || "Customer"}
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm sm:text-base truncate">{user.name}</p>
-                        <p className="text-xs sm:text-sm text-gray-600 truncate">{user.email}</p>
+                      <div className="flex justify-between sm:flex-col sm:text-right sm:items-end">
+                        <p className="font-medium text-sm sm:text-base">
+                          {formatCurrency(order.totalPrice || 0)}
+                        </p>
+                        <Badge 
+                          variant="outline"
+                          className={`text-xs ${
+                            order.orderStatus === 'completed' ? 'bg-green-50 text-green-700 border-green-200' : 
+                            order.orderStatus === 'pending' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 
+                            'bg-red-50 text-red-700 border-red-200'
+                          }`}
+                        >
+                          {order.orderStatus || 'pending'}
+                        </Badge>
                       </div>
                     </div>
-                    {/* Approved text inside card with proper badge styling */}
-                    {getUserStatusBadge(user)}
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recent Services */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base sm:text-lg">Recent Services</CardTitle>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                className="text-xs sm:text-sm"
+              >
+                <Eye className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                View All
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {recentServices.length === 0 ? (
+                <div className="text-center py-4 sm:py-8 text-gray-500">
+                  <Wrench className="w-8 h-8 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-4 text-gray-300" />
+                  <p className="text-sm sm:text-base">No services yet</p>
+                  <p className="text-xs sm:text-sm mt-1 sm:mt-2">Add your first service to get started</p>
+                </div>
+              ) : (
+                <div className="space-y-2 sm:space-y-3">
+                  {recentServices.map((service) => (
+                    <div 
+                      key={service.id} 
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-2 sm:p-3 border rounded-lg hover:bg-gray-50 transition-colors gap-2 sm:gap-0"
+                    >
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="p-1 sm:p-2 rounded-full bg-purple-100 flex-shrink-0">
+                          <Wrench className="w-3 h-3 sm:w-4 sm:h-4 text-purple-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm sm:text-base truncate">{service.name}</p>
+                          <p className="text-xs sm:text-sm text-gray-600 line-clamp-1">
+                            {service.description || "No description"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex justify-between sm:flex-col sm:text-right sm:items-end">
+                        <p className="font-medium text-sm sm:text-base">
+                          {service.price ? formatKES(service.price) : "N/A"}
+                        </p>
+                        {service.user && (
+                          <p className="text-xs text-gray-500 truncate max-w-[120px] sm:max-w-none">
+                            by {service.user.name || service.user.email}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Quick Stats - Only show if data is available */}
+      {(products.length > 0 || users.length > 0) && (
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          {products.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base sm:text-lg">Popular Products</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {products.slice(0, 4).length === 0 ? (
+                  <div className="text-center py-4 text-gray-500">
+                    <Package className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                    <p className="text-sm sm:text-base">No products available</p>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                ) : (
+                  <div className="space-y-2 sm:space-y-3">
+                    {products.slice(0, 4).map((product) => (
+                      <div 
+                        key={product.id} 
+                        className="flex items-center justify-between py-2 border-b last:border-0"
+                      >
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <Package className="w-3 h-3 sm:w-5 sm:h-5 text-gray-600" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm sm:text-base truncate">{product.name}</p>
+                            <p className="text-xs sm:text-sm text-gray-600">
+                              {formatCurrency(product.price || 0)}
+                            </p>
+                          </div>
+                        </div>
+                        <Badge 
+                          variant="outline"
+                          className={`text-xs px-2 py-1 ${
+                            (product.stockQuantity || 0) > 10 ? 'bg-green-50 text-green-700 border-green-200' : 
+                            (product.stockQuantity || 0) > 0 ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 
+                            'bg-red-50 text-red-700 border-red-200'
+                          }`}
+                        >
+                          Stock: {product.stockQuantity || 0}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {users.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base sm:text-lg">Recent Users</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {users.slice(0, 4).length === 0 ? (
+                  <div className="text-center py-4 text-gray-500">
+                    <Users className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                    <p className="text-sm sm:text-base">No users registered</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 sm:space-y-3">
+                    {users.slice(0, 4).map((user) => (
+                      <div 
+                        key={user.id} 
+                        className="flex items-center justify-between py-2 border-b last:border-0"
+                      >
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                            <Users className="w-3 h-3 sm:w-5 sm:h-5 text-gray-600" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm sm:text-base truncate">{user.name}</p>
+                            <p className="text-xs sm:text-sm text-gray-600 truncate">{user.email}</p>
+                          </div>
+                        </div>
+                        {/* Approved text inside card with proper badge styling */}
+                        {getUserStatusBadge(user)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* System Status */}
       <Card>

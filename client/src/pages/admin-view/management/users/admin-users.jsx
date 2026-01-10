@@ -76,6 +76,37 @@ const AdminUsers = () => {
     return matchesSearch && matchesFilter;
   });
 
+  // Format user type for display - converts snake_case to Title Case
+  const formatUserType = (userType) => {
+    if (!userType) return 'Customer';
+    
+    // Handle common cases
+    const userTypeMap = {
+      'customer': 'Customer',
+      'admin': 'Admin',
+      'technician_manager': 'Technician Manager',
+      'driver': 'Driver',
+      'finance_manager': 'Finance Manager',
+      'inventory_manager': 'Inventory Manager',
+      'dispatch_manager': 'Dispatch Manager',
+      'service_manager': 'Service Manager',
+      'supplier': 'Supplier',
+      'technician': 'Technician',
+      'manager': 'Manager'
+    };
+    
+    // Check if we have a direct mapping
+    if (userTypeMap[userType]) {
+      return userTypeMap[userType];
+    }
+    
+    // Fallback: Convert snake_case to Title Case
+    return userType
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  };
+
   const handleEditUser = (user) => {
     if (!user) {
       toast.error('Invalid user data');
@@ -156,11 +187,6 @@ const AdminUsers = () => {
     dispatch(fetchUsers());
   };
 
-  // Format user type for display
-  const formatUserType = (userType) => {
-    return userType?.charAt(0).toUpperCase() + userType?.slice(1) || 'Customer';
-  };
-
   // Loading state
   if (status === "pending") {
     return (
@@ -227,6 +253,13 @@ const AdminUsers = () => {
                 <SelectItem value="customer">Customers</SelectItem>
                 <SelectItem value="approved">Approved</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="technician_manager">Technician Manager</SelectItem>
+                <SelectItem value="finance_manager">Finance Manager</SelectItem>
+                <SelectItem value="inventory_manager">Inventory Manager</SelectItem>
+                <SelectItem value="dispatch_manager">Dispatch Manager</SelectItem>
+                <SelectItem value="service_manager">Service Manager</SelectItem>
+                <SelectItem value="driver">Driver</SelectItem>
+                <SelectItem value="supplier">Supplier</SelectItem>
               </SelectContent>
             </Select>
             
@@ -248,7 +281,14 @@ const AdminUsers = () => {
                 { value: 'admin', label: 'Admins' },
                 { value: 'customer', label: 'Customers' },
                 { value: 'approved', label: 'Approved' },
-                { value: 'pending', label: 'Pending' }
+                { value: 'pending', label: 'Pending' },
+                { value: 'technician_manager', label: 'Tech Manager' },
+                { value: 'finance_manager', label: 'Finance Manager' },
+                { value: 'inventory_manager', label: 'Inventory Manager' },
+                { value: 'dispatch_manager', label: 'Dispatch Manager' },
+                { value: 'service_manager', label: 'Service Manager' },
+                { value: 'driver', label: 'Driver' },
+                { value: 'supplier', label: 'Supplier' }
               ].map((filterType) => (
                 <Button
                   key={filterType.value}
@@ -274,7 +314,14 @@ const AdminUsers = () => {
             { value: 'admin', label: 'Admins' },
             { value: 'customer', label: 'Customers' },
             { value: 'approved', label: 'Approved' },
-            { value: 'pending', label: 'Pending' }
+            { value: 'pending', label: 'Pending' },
+            { value: 'technician_manager', label: 'Tech Manager' },
+            { value: 'finance_manager', label: 'Finance Manager' },
+            { value: 'inventory_manager', label: 'Inventory Manager' },
+            { value: 'dispatch_manager', label: 'Dispatch Manager' },
+            { value: 'service_manager', label: 'Service Manager' },
+            { value: 'driver', label: 'Driver' },
+            { value: 'supplier', label: 'Supplier' }
           ].map((filterType) => (
             <Button
               key={filterType.value}
@@ -340,23 +387,27 @@ const AdminUsers = () => {
 
             <div className="space-y-1 sm:space-y-2">
               <Label htmlFor="role" className="text-sm sm:text-base">Role</Label>
-              <select 
-                id="role"
+              <Select 
                 value={formData.userType}
-                onChange={(e) => setFormData(prev => ({ ...prev, userType: e.target.value }))}
-                className="w-full p-2 border rounded-md text-sm sm:text-base h-9 sm:h-10"
+                onValueChange={(value) => setFormData(prev => ({ ...prev, userType: value }))}
                 disabled={isSubmitting}
               >
-                <option value="customer">Customer</option>
-                <option value="admin">Admin</option>
-                <option value="technician_manager">Technician</option>
-                <option value="driver">Driver</option>
-                <option value="finance_manager">Finance Manager</option>
-                <option value="inventory_manager">Inventory Manager</option>
-                <option value="dispatch_manager">Dispatch Manager</option>
-                <option value="service_manager">Service Manager</option>
-                <option value="supplier">Supplier</option>
-              </select>
+                <SelectTrigger className="w-full text-sm sm:text-base h-9 sm:h-10">
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="customer">Customer</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="technician_manager">Technician Manager</SelectItem>
+                  <SelectItem value="driver">Driver</SelectItem>
+                  <SelectItem value="finance_manager">Finance Manager</SelectItem>
+                  <SelectItem value="inventory_manager">Inventory Manager</SelectItem>
+                  <SelectItem value="dispatch_manager">Dispatch Manager</SelectItem>
+                  <SelectItem value="service_manager">Service Manager</SelectItem>
+                  <SelectItem value="supplier">Supplier</SelectItem>
+                  <SelectItem value="technician">Technician</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="flex gap-2 pt-2">
@@ -429,7 +480,11 @@ const AdminUsers = () => {
                     </div>
                   )}
                   
-                  <Badge variant="outline" className="text-xs px-2 py-0.5">
+                  <Badge 
+                    variant="outline" 
+                    className="text-xs px-2 py-0.5"
+                    title={user.userType} // Show original value on hover
+                  >
                     {formatUserType(user.userType)}
                   </Badge>
                 </div>
@@ -485,7 +540,7 @@ const AdminUsers = () => {
                         <MdMoreVert className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-40">
+                    <DropdownMenuContent align="end" className="w-48">
                       {!user.isApproved ? (
                         <DropdownMenuItem onClick={() => handleApproveUser(user.id, true)}>
                           <MdCheck className="mr-2 h-4 w-4" />
