@@ -21,7 +21,8 @@ import {
   MdInventory,
   MdAttachMoney,
   MdCategory,
-  MdDescription 
+  MdDescription,
+  MdImage
 } from "react-icons/md";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -221,7 +222,7 @@ const AdminProducts = () => {
 
       {/* Add/Edit Product Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl">
               {editingProduct ? 'Edit Product' : 'Add New Product'}
@@ -229,42 +230,65 @@ const AdminProducts = () => {
           </DialogHeader>
           
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Image Preview and Form Grid */}
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              {/* Left Column - Image Preview */}
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="image">Product Image</Label>
-                  <Input
-                    id="image"
-                    type="file"
-                    onChange={handleImageChange}
-                    accept="image/*"
-                    className="cursor-pointer"
-                  />
-                  <p className="text-xs text-gray-500">
-                    Max size: 2MB
-                  </p>
-                </div>
-                
-                {imagePreview && (
-                  <div className="mt-4">
-                    <img
-                      src={imagePreview}
-                      alt="Preview"
-                      className="object-cover w-full rounded-lg border-2 border-dashed border-gray-300 max-h-64"
+            {/* Form Layout - Responsive */}
+            <div className="space-y-4">
+              {/* Image Upload Section */}
+              <div className="space-y-2">
+                <Label htmlFor="image" className="flex items-center gap-2">
+                  <MdImage className="w-4 h-4" />
+                  Product Image
+                </Label>
+                <div className="flex flex-col gap-4 sm:flex-row">
+                  {/* Image Preview - Side by side on mobile, better responsive */}
+                  <div className="flex-1">
+                    <Input
+                      id="image"
+                      type="file"
+                      onChange={handleImageChange}
+                      accept="image/*"
+                      className="cursor-pointer"
                     />
-                    {editingProduct && (
-                      <p className="mt-2 text-sm text-center text-gray-500">
+                    <p className="mt-1 text-xs text-gray-500">
+                      Max size: 2MB
+                    </p>
+                    {editingProduct && !imagePreview && (
+                      <p className="mt-2 text-sm text-gray-500">
                         Leave empty to keep current image
                       </p>
                     )}
                   </div>
-                )}
+                  
+                  {/* Image Preview - Better sizing */}
+                  {imagePreview && (
+                    <div className="flex-shrink-0">
+                      <div className="relative w-full sm:w-48 h-48 border-2 border-dashed border-gray-300 rounded-lg overflow-hidden">
+                        <img
+                          src={imagePreview}
+                          alt="Preview"
+                          className="object-cover w-full h-full"
+                        />
+                        <div className="absolute top-2 right-2">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              setImagePreview(null);
+                              setFormData(prev => ({ ...prev, image: null }));
+                            }}
+                            className="w-8 h-8 bg-white/90 hover:bg-white"
+                          >
+                            <MdDelete className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* Right Column - Form Fields */}
-              <div className="space-y-4">
+              {/* Product Details Grid */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="name" className="flex items-center gap-2">
                     <MdInventory className="w-4 h-4" />
@@ -278,43 +302,6 @@ const AdminProducts = () => {
                     placeholder="Enter product name"
                     required
                   />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="price" className="flex items-center gap-2">
-                      <MdAttachMoney className="w-4 h-4" />
-                      Price
-                    </Label>
-                    <Input
-                      id="price"
-                      name="price"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.price}
-                      onChange={handleInputChange}
-                      placeholder="0.00"
-                      required
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="stockQuantity" className="flex items-center gap-2">
-                      <MdInventory className="w-4 h-4" />
-                      Stock
-                    </Label>
-                    <Input
-                      id="stockQuantity"
-                      name="stockQuantity"
-                      type="number"
-                      min="0"
-                      value={formData.stockQuantity}
-                      onChange={handleInputChange}
-                      placeholder="0"
-                      required
-                    />
-                  </div>
                 </div>
                 
                 <div className="space-y-2">
@@ -337,39 +324,80 @@ const AdminProducts = () => {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              {/* Price and Stock */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="price" className="flex items-center gap-2">
+                    <MdAttachMoney className="w-4 h-4" />
+                    Price (KES)
+                  </Label>
+                  <Input
+                    id="price"
+                    name="price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.price}
+                    onChange={handleInputChange}
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="description" className="flex items-center gap-2">
-                    <MdDescription className="w-4 h-4" />
-                    Description
+                  <Label htmlFor="stockQuantity" className="flex items-center gap-2">
+                    <MdInventory className="w-4 h-4" />
+                    Stock Quantity
                   </Label>
-                  <Textarea
-                    id="description"
-                    name="description"
-                    value={formData.description}
+                  <Input
+                    id="stockQuantity"
+                    name="stockQuantity"
+                    type="number"
+                    min="0"
+                    value={formData.stockQuantity}
                     onChange={handleInputChange}
-                    placeholder="Enter product description"
-                    rows={3}
+                    placeholder="0"
                     required
                   />
                 </div>
               </div>
+
+              {/* Description */}
+              <div className="space-y-2">
+                <Label htmlFor="description" className="flex items-center gap-2">
+                  <MdDescription className="w-4 h-4" />
+                  Description
+                </Label>
+                <Textarea
+                  id="description"
+                  name="description"
+                  value={formData.description}
+                  onChange={handleInputChange}
+                  placeholder="Enter product description"
+                  rows={3}
+                  required
+                  className="resize-none"
+                />
+              </div>
             </div>
 
-            {/* Dialog Actions */}
-            <div className="flex justify-end gap-3 pt-4">
+            {/* Dialog Actions - Always visible at bottom */}
+            <div className="flex flex-col gap-2 pt-4 border-t sm:flex-row sm:justify-end">
               <Button 
                 type="button" 
                 variant="outline" 
                 onClick={handleCloseDialog}
                 disabled={isSubmitting}
+                className="sm:w-auto"
               >
                 Cancel
               </Button>
               <Button 
                 type="submit" 
                 disabled={isSubmitting}
-                className="gap-2 min-w-32"
+                className="gap-2 sm:w-auto"
               >
                 {isSubmitting ? (
                   <>

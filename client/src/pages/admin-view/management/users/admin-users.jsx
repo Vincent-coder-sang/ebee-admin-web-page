@@ -349,8 +349,13 @@ const AdminUsers = () => {
               >
                 <option value="customer">Customer</option>
                 <option value="admin">Admin</option>
-                <option value="technician">Technician</option>
+                <option value="technician_manager">Technician</option>
                 <option value="driver">Driver</option>
+                <option value="finance_manager">Finance Manager</option>
+                <option value="inventory_manager">Inventory Manager</option>
+                <option value="dispatch_manager">Dispatch Manager</option>
+                <option value="service_manager">Service Manager</option>
+                <option value="supplier">Supplier</option>
               </select>
             </div>
 
