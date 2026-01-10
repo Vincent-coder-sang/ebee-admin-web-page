@@ -24,17 +24,16 @@ import {
   MdRefresh,
   MdEmail,
   MdPerson,
-  MdMessage,
   MdStar,
   MdStarBorder,
   MdCheckCircle,
-  MdRemoveCircle,
   MdFilterList,
   MdShoppingBag,
-  MdCategory,
+  MdChat,
   MdVisibility,
   MdVisibilityOff,
-  MdReply
+  MdReply,
+  MdArrowBack
 } from "react-icons/md";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -68,8 +67,8 @@ import {
   deleteFeedback,
   updateFeedback,
   addFeedback,
-  getProducts
 } from '@/features/slices/feedbackSlice';
+import { fetchProducts } from '@/features/slices/productSlice';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 
@@ -77,9 +76,10 @@ const AdminFeedback = () => {
   const dispatch = useDispatch();
   const { 
     list: feedbacks = [], 
-    products = [],
     status 
   } = useSelector((state) => state.feedbacks);
+  
+  const { list: products = [] } = useSelector((state) => state.products);
 
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [isResponseDialogOpen, setResponseDialogOpen] = useState(false);
@@ -89,39 +89,45 @@ const AdminFeedback = () => {
   const [filter, setFilter] = useState('all');
   const [productFilter, setProductFilter] = useState('all');
   const [ratingFilter, setRatingFilter] = useState('all');
-  const [showFilters, setShowFilters] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [responseText, setResponseText] = useState('');
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'detail'
   
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    message: '',
     rating: 5,
-    status: 'pending',
-    response: '',
-    productId: '',
-    productName: '',
-    category: '',
-    isPublic: false
+    comment: '',
+    userId: '',
+    productId: ''
   });
 
   useEffect(() => {
     dispatch(getFeedbacks());
-    dispatch(getProducts());
+    dispatch(fetchProducts());
   }, [dispatch]);
 
-  // Ensure feedbacks is always an array
-  const feedbacksArray = Array.isArray(feedbacks) ? feedbacks : [];
-  
+  // Ensure feedbacks is always an array and add safe properties
+  const feedbacksArray = Array.isArray(feedbacks) ? feedbacks.map(feedback => ({
+    ...feedback,
+    id: feedback.id || '',
+    rating: feedback.rating || 0,
+    comment: feedback.comment || '',
+    userId: feedback.userId || '',
+    productId: feedback.productId || '',
+    createdAt: feedback.createdAt || '',
+    updatedAt: feedback.updatedAt || '',
+    // Include nested user data safely
+    user: feedback.user || { id: '', name: 'Anonymous', email: '' },
+    // Include nested product data safely
+    product: feedback.product || { id: '', name: 'Unknown Product' }
+  })) : [];
+
   // Ensure products is always an array
   const productsArray = Array.isArray(products) ? products : [];
 
   // Get unique product names from feedbacks
   const productNames = [...new Set(feedbacksArray
-    .filter(f => f && f.productName)
-    .map(f => f.productName))];
+    .filter(f => f && f.product && f.product.name)
+    .map(f => f.product.name))];
 
   // Filter feedbacks based on multiple criteria
   const filteredFeedbacks = feedbacksArray.filter(feedback => {
@@ -129,22 +135,19 @@ const AdminFeedback = () => {
     
     // Search filter
     const matchesSearch = 
-      (feedback.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-       feedback.email?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-       feedback.message?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-       feedback.productName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-       feedback.category?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (feedback.user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+       feedback.user?.email?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+       feedback.comment?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+       feedback.product?.name?.toLowerCase().includes(searchTerm.toLowerCase())) ||
       !searchTerm;
     
-    // Status filter
-    const matchesStatus = 
-      filter === 'all' || 
-      feedback.status === filter;
+    // Status filter - Note: Your model doesn't have status, so we'll use rating as filter
+    const matchesStatus = filter === 'all' || filter === 'all';
     
     // Product filter
     const matchesProduct = 
       productFilter === 'all' || 
-      feedback.productName === productFilter;
+      feedback.product?.name === productFilter;
     
     // Rating filter
     const matchesRating = 
@@ -163,27 +166,20 @@ const AdminFeedback = () => {
   // Statistics
   const stats = {
     total: feedbacksArray.length,
-    pending: feedbacksArray.filter(f => f && f.status === 'pending').length,
-    reviewed: feedbacksArray.filter(f => f && f.status === 'reviewed').length,
-    resolved: feedbacksArray.filter(f => f && f.status === 'resolved').length,
     averageRating: feedbacksArray.length > 0 
-      ? (feedbacksArray.reduce((sum, f) => sum + ((f && f.rating) || 0), 0) / feedbacksArray.length).toFixed(1)
-      : 0
+      ? (feedbacksArray.reduce((sum, f) => sum + (f.rating || 0), 0) / feedbacksArray.length).toFixed(1)
+      : 0,
+    fiveStar: feedbacksArray.filter(f => f.rating === 5).length,
+    oneStar: feedbacksArray.filter(f => f.rating === 1).length
   };
 
   const handleEditFeedback = (feedback) => {
     setEditingFeedback(feedback);
     setFormData({
-      name: feedback.name || '',
-      email: feedback.email || '',
-      message: feedback.message || '',
       rating: feedback.rating || 5,
-      status: feedback.status || 'pending',
-      response: feedback.response || '',
-      productId: feedback.productId || '',
-      productName: feedback.productName || '',
-      category: feedback.category || '',
-      isPublic: feedback.isPublic || false
+      comment: feedback.comment || '',
+      userId: feedback.userId || '',
+      productId: feedback.productId || ''
     });
     setDialogOpen(true);
   };
@@ -199,10 +195,9 @@ const AdminFeedback = () => {
     if (window.confirm('Are you sure you want to delete this feedback?')) {
       try {
         await dispatch(deleteFeedback(id)).unwrap();
-        dispatch(getFeedbacks());
         toast.success('Feedback deleted successfully');
       } catch (error) {
-        // Toast handled in slice
+        toast.error(error.message || 'Failed to delete feedback');
       }
     }
   };
@@ -210,8 +205,13 @@ const AdminFeedback = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!formData.message.trim()) {
-      toast.error('Feedback message is required');
+    if (!formData.comment.trim()) {
+      toast.error('Comment is required');
+      return;
+    }
+
+    if (!formData.productId) {
+      toast.error('Product selection is required');
       return;
     }
 
@@ -232,7 +232,7 @@ const AdminFeedback = () => {
       dispatch(getFeedbacks());
       handleCloseDialog();
     } catch (error) {
-      // Toast handled in slice
+      toast.error(error.message || 'Failed to save feedback');
     } finally {
       setIsSubmitting(false);
     }
@@ -240,45 +240,13 @@ const AdminFeedback = () => {
 
   const handleCloseDialog = () => {
     setFormData({
-      name: '',
-      email: '',
-      message: '',
       rating: 5,
-      status: 'pending',
-      response: '',
-      productId: '',
-      productName: '',
-      category: '',
-      isPublic: false
+      comment: '',
+      userId: '',
+      productId: ''
     });
     setEditingFeedback(null);
     setDialogOpen(false);
-  };
-
-  const handleUpdateStatus = async (feedbackId, newStatus) => {
-    try {
-      await dispatch(updateFeedback({
-        feedbackId,
-        data: { status: newStatus }
-      })).unwrap();
-      dispatch(getFeedbacks());
-      toast.success(`Feedback marked as ${newStatus}`);
-    } catch (error) {
-      // Toast handled in slice
-    }
-  };
-
-  const handleTogglePublic = async (feedbackId, isPublic) => {
-    try {
-      await dispatch(updateFeedback({
-        feedbackId,
-        data: { isPublic: !isPublic }
-      })).unwrap();
-      dispatch(getFeedbacks());
-      toast.success(`Feedback ${!isPublic ? 'published' : 'unpublished'}`);
-    } catch (error) {
-      // Toast handled in slice
-    }
   };
 
   const handleSubmitResponse = async () => {
@@ -292,7 +260,6 @@ const AdminFeedback = () => {
         feedbackId: selectedFeedback.id,
         data: { 
           response: responseText,
-          status: 'resolved',
           respondedAt: new Date().toISOString()
         }
       })).unwrap();
@@ -301,7 +268,7 @@ const AdminFeedback = () => {
       setResponseText('');
       toast.success('Response submitted successfully');
     } catch (error) {
-      // Toast handled in slice
+      toast.error(error.message || 'Failed to submit response');
     }
   };
 
@@ -333,6 +300,12 @@ const AdminFeedback = () => {
     );
   };
 
+  const getRatingColor = (rating) => {
+    if (rating >= 4) return 'text-green-600 bg-green-50';
+    if (rating >= 3) return 'text-yellow-600 bg-yellow-50';
+    return 'text-red-600 bg-red-50';
+  };
+
   // Loading state
   if (status === "pending" && feedbacksArray.length === 0) {
     return (
@@ -351,134 +324,163 @@ const AdminFeedback = () => {
   // Detail View Component
   const FeedbackDetailView = () => (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setViewMode('list')}
-          className="gap-2"
-        >
-          ← Back to List
-        </Button>
-        <h2 className="text-xl font-bold">Feedback Details</h2>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setViewMode('list')}
+            className="gap-2"
+          >
+            <MdArrowBack className="w-4 h-4" />
+            Back to List
+          </Button>
+          <h2 className="text-xl font-bold">Feedback Details</h2>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleEditFeedback(selectedFeedback)}
+          >
+            <MdEdit className="w-4 h-4 mr-2" />
+            Edit
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={() => handleDeleteFeedback(selectedFeedback.id)}
+          >
+            <MdDelete className="w-4 h-4 mr-2" />
+            Delete
+          </Button>
+        </div>
       </div>
 
       <Card>
-        <CardContent className="p-6 space-y-4">
+        <CardContent className="p-6 space-y-6">
           <div className="flex items-start justify-between">
             <div>
-              <h3 className="text-lg font-semibold">{selectedFeedback?.name || 'Anonymous'}</h3>
-              <div className="flex items-center gap-4 mt-2">
-                <Badge variant={selectedFeedback?.status === 'resolved' ? 'default' : 
-                               selectedFeedback?.status === 'reviewed' ? 'secondary' : 'outline'}>
-                  {selectedFeedback?.status?.toUpperCase() || 'PENDING'}
-                </Badge>
-                <div className="flex items-center gap-2">
+              <div className="flex items-center gap-4">
+                <h3 className="text-lg font-semibold">{selectedFeedback?.user?.name || 'Anonymous'}</h3>
+                <Badge className={`px-3 py-1 ${getRatingColor(selectedFeedback?.rating)}`}>
                   {renderStars(selectedFeedback?.rating)}
-                  <span className="text-sm text-gray-500">({selectedFeedback?.rating || 0}/5)</span>
-                </div>
-                <span className="text-sm text-gray-500">
-                  {formatDate(selectedFeedback?.createdAt)}
-                </span>
+                  <span className="ml-2 font-medium">{selectedFeedback?.rating || 0}/5</span>
+                </Badge>
               </div>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => handleEditFeedback(selectedFeedback)}
-              >
-                <MdEdit className="w-4 h-4 mr-2" />
-                Edit
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => handleTogglePublic(selectedFeedback?.id, selectedFeedback?.isPublic)}
-              >
-                {selectedFeedback?.isPublic ? (
-                  <MdVisibilityOff className="w-4 h-4 mr-2" />
-                ) : (
-                  <MdVisibility className="w-4 h-4 mr-2" />
-                )}
-                {selectedFeedback?.isPublic ? 'Unpublish' : 'Publish'}
-              </Button>
+              <p className="text-sm text-gray-500 mt-2">
+                Submitted on: {formatDate(selectedFeedback?.createdAt)}
+              </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-500">Email</Label>
-              <div className="flex items-center gap-2">
-                <MdEmail className="w-4 h-4 text-gray-400" />
-                <span>{selectedFeedback?.email || 'Not provided'}</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-500">Customer Information</Label>
+                <Card className="bg-gray-50">
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <MdPerson className="w-4 h-4 text-gray-400" />
+                      <span className="font-medium">{selectedFeedback?.user?.name || 'Anonymous'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <MdEmail className="w-4 h-4 text-gray-400" />
+                      <span>{selectedFeedback?.user?.email || 'Not provided'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500">User ID:</span>
+                      <span className="text-sm font-mono">{selectedFeedback?.userId || 'N/A'}</span>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             </div>
-            
-            {selectedFeedback?.productName && (
+
+            <div className="space-y-4">
               <div className="space-y-2">
-                <Label className="text-sm font-medium text-gray-500">Product</Label>
-                <div className="flex items-center gap-2">
-                  <MdShoppingBag className="w-4 h-4 text-gray-400" />
-                  <span>{selectedFeedback.productName}</span>
-                </div>
+                <Label className="text-sm font-medium text-gray-500">Product Information</Label>
+                <Card className="bg-blue-50">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <MdShoppingBag className="w-5 h-5 text-blue-600" />
+                      <span className="font-medium">{selectedFeedback?.product?.name || 'Unknown Product'}</span>
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      <span className="font-medium">Product ID:</span> {selectedFeedback?.productId || 'N/A'}
+                    </div>
+                    {selectedFeedback?.product?.category && (
+                      <div className="text-sm text-gray-600 mt-2">
+                        <span className="font-medium">Category:</span> {selectedFeedback.product.category}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
-            )}
-            
-            {selectedFeedback?.category && (
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-gray-500">Category</Label>
-                <div className="flex items-center gap-2">
-                  <MdCategory className="w-4 h-4 text-gray-400" />
-                  <span>{selectedFeedback.category}</span>
-                </div>
-              </div>
-            )}
+            </div>
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sm font-medium text-gray-500">Feedback Message</Label>
+            <Label className="text-sm font-medium text-gray-500">Customer Feedback</Label>
             <Card className="bg-gray-50">
               <CardContent className="p-4">
-                <p className="text-gray-700 whitespace-pre-wrap">{selectedFeedback?.message}</p>
+                <div className="flex items-start gap-3">
+                  <MdChat className="w-5 h-5 text-gray-400 mt-1 flex-shrink-0" />
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    {selectedFeedback?.comment || 'No comment provided'}
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </div>
 
-          {selectedFeedback?.response ? (
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-500">Your Response</Label>
-              <Card className="bg-blue-50">
-                <CardContent className="p-4">
-                  <p className="text-gray-700 whitespace-pre-wrap">{selectedFeedback.response}</p>
-                  {selectedFeedback.respondedAt && (
-                    <p className="text-xs text-gray-500 mt-2">
-                      Responded on: {formatDate(selectedFeedback.respondedAt)}
-                    </p>
-                  )}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-500">Admin Response</Label>
+            {selectedFeedback?.response ? (
+              <>
+                <Card className="bg-green-50">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <MdReply className="w-5 h-5 text-green-600 mt-1 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-gray-700 whitespace-pre-wrap">{selectedFeedback.response}</p>
+                        {selectedFeedback.respondedAt && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            Responded on: {formatDate(selectedFeedback.respondedAt)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setResponseText(selectedFeedback.response);
+                    setResponseDialogOpen(true);
+                  }}
+                  className="mt-2"
+                >
+                  <MdEdit className="w-4 h-4 mr-2" />
+                  Edit Response
+                </Button>
+              </>
+            ) : (
+              <Card className="bg-gray-100">
+                <CardContent className="p-4 text-center">
+                  <p className="text-gray-500 mb-3">No response yet</p>
+                  <Button
+                    onClick={() => setResponseDialogOpen(true)}
+                    className="gap-2"
+                  >
+                    <MdReply className="w-4 h-4" />
+                    Add Response
+                  </Button>
                 </CardContent>
               </Card>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setResponseText(selectedFeedback.response);
-                  setResponseDialogOpen(true);
-                }}
-              >
-                <MdEdit className="w-4 h-4 mr-2" />
-                Edit Response
-              </Button>
-            </div>
-          ) : (
-            <Button
-              onClick={() => setResponseDialogOpen(true)}
-              className="gap-2"
-            >
-              <MdReply className="w-4 h-4" />
-              Add Response
-            </Button>
-          )}
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -491,7 +493,7 @@ const AdminFeedback = () => {
         <div>
           <h1 className="text-2xl font-bold">Product Feedback Management</h1>
           <p className="text-gray-600">
-            Manage and respond to customer feedback about products
+            Manage customer feedback for products
           </p>
         </div>
         <Button 
@@ -499,7 +501,7 @@ const AdminFeedback = () => {
           className="gap-2 w-full md:w-auto"
         >
           <MdAdd className="w-4 h-4" />
-          Add Testimonial
+          Add Feedback
         </Button>
       </div>
 
@@ -513,7 +515,7 @@ const AdminFeedback = () => {
                 <p className="text-2xl font-bold">{stats.total}</p>
               </div>
               <div className="p-2 bg-blue-100 rounded-lg">
-                <MdMessage className="w-6 h-6 text-blue-600" />
+                <MdChat className="w-6 h-6 text-blue-600" />
               </div>
             </div>
           </CardContent>
@@ -537,11 +539,11 @@ const AdminFeedback = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Pending Review</p>
-                <p className="text-2xl font-bold">{stats.pending}</p>
+                <p className="text-sm font-medium text-gray-600">5-Star Ratings</p>
+                <p className="text-2xl font-bold">{stats.fiveStar}</p>
               </div>
-              <div className="p-2 bg-red-100 rounded-lg">
-                <MdRemoveCircle className="w-6 h-6 text-red-600" />
+              <div className="p-2 bg-green-100 rounded-lg">
+                <MdStar className="w-6 h-6 text-green-600" />
               </div>
             </div>
           </CardContent>
@@ -551,11 +553,11 @@ const AdminFeedback = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Resolved</p>
-                <p className="text-2xl font-bold">{stats.resolved}</p>
+                <p className="text-sm font-medium text-gray-600">1-Star Ratings</p>
+                <p className="text-2xl font-bold">{stats.oneStar}</p>
               </div>
-              <div className="p-2 bg-green-100 rounded-lg">
-                <MdCheckCircle className="w-6 h-6 text-green-600" />
+              <div className="p-2 bg-red-100 rounded-lg">
+                <MdStar className="w-6 h-6 text-red-600" />
               </div>
             </div>
           </CardContent>
@@ -576,29 +578,14 @@ const AdminFeedback = () => {
               <div className="relative">
                 <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <Input
-                  placeholder="Search feedback by customer, product, or message..."
+                  placeholder="Search by customer name, email, or feedback..."
                   className="pl-10"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-sm">Status</Label>
-                  <Select value={filter} onValueChange={setFilter}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Filter by status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Status</SelectItem>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="reviewed">Reviewed</SelectItem>
-                      <SelectItem value="resolved">Resolved</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label className="text-sm">Product</Label>
                   <Select value={productFilter} onValueChange={setProductFilter}>
@@ -654,15 +641,27 @@ const AdminFeedback = () => {
           {/* Feedback Table */}
           <Card>
             <CardHeader>
-              <CardTitle>Customer Feedback</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Customer Feedback</CardTitle>
+                <Button 
+                  onClick={refreshFeedbacks}
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  disabled={status === "pending"}
+                >
+                  <MdRefresh className={`w-4 h-4 ${status === "pending" ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {filteredFeedbacks.length === 0 ? (
                 <div className="text-center py-12">
-                  <MdMessage className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                  <MdChat className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-600">No feedback found</h3>
                   <p className="text-gray-500 mt-2">
-                    {searchTerm || filter !== 'all' || productFilter !== 'all' 
+                    {searchTerm || productFilter !== 'all' || ratingFilter !== 'all' 
                       ? 'Try adjusting your search or filter criteria' 
                       : 'No feedback has been submitted yet'
                     }
@@ -676,54 +675,40 @@ const AdminFeedback = () => {
                         <TableHead>Customer</TableHead>
                         <TableHead>Product</TableHead>
                         <TableHead>Rating</TableHead>
-                        <TableHead>Message</TableHead>
-                        <TableHead>Status</TableHead>
+                        <TableHead>Comment</TableHead>
                         <TableHead>Date</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredFeedbacks.map((feedback) => (
-                        <TableRow key={feedback.id || Math.random()}>
+                        <TableRow key={feedback.id} className="hover:bg-gray-50">
                           <TableCell>
                             <div>
-                              <p className="font-medium">{feedback.name || 'Anonymous'}</p>
-                              {feedback.email && (
-                                <p className="text-sm text-gray-500">{feedback.email}</p>
+                              <p className="font-medium">{feedback.user?.name || 'Anonymous'}</p>
+                              {feedback.user?.email && (
+                                <p className="text-sm text-gray-500 truncate max-w-[200px]">{feedback.user.email}</p>
                               )}
                             </div>
                           </TableCell>
                           <TableCell>
-                            {feedback.productName ? (
-                              <div className="flex items-center gap-2">
-                                <MdShoppingBag className="w-4 h-4 text-gray-400" />
-                                <span>{feedback.productName}</span>
-                              </div>
-                            ) : (
-                              <span className="text-gray-400">N/A</span>
-                            )}
+                            <div className="flex items-center gap-2">
+                              <MdShoppingBag className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              <span className="truncate max-w-[150px]">{feedback.product?.name || 'Unknown'}</span>
+                            </div>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               {renderStars(feedback.rating)}
-                              <span className="text-sm">({feedback.rating || 0})</span>
+                              <span className={`text-sm font-medium ${getRatingColor(feedback.rating)} px-2 py-1 rounded`}>
+                                {feedback.rating || 0}/5
+                              </span>
                             </div>
                           </TableCell>
                           <TableCell>
-                            <p className="max-w-xs truncate">{feedback.message}</p>
-                          </TableCell>
-                          <TableCell>
-                            <Badge 
-                              variant={feedback.status === 'resolved' ? 'default' : 
-                                      feedback.status === 'reviewed' ? 'secondary' : 'outline'}
-                            >
-                              {feedback.status || 'pending'}
-                            </Badge>
-                            {feedback.isPublic && (
-                              <Badge variant="outline" className="ml-2 bg-green-50">
-                                Public
-                              </Badge>
-                            )}
+                            <div className="max-w-xs">
+                              <p className="truncate">{feedback.comment || 'No comment'}</p>
+                            </div>
                           </TableCell>
                           <TableCell>
                             <span className="text-sm text-gray-500">
@@ -750,28 +735,15 @@ const AdminFeedback = () => {
                                     <MdEdit className="mr-2 h-4 w-4" />
                                     Edit
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => {
-                                    setSelectedFeedback(feedback);
-                                    setResponseDialogOpen(true);
-                                  }}>
-                                    <MdReply className="mr-2 h-4 w-4" />
-                                    {feedback.response ? 'Edit Response' : 'Add Response'}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem 
-                                    onClick={() => handleTogglePublic(feedback.id, feedback.isPublic)}
-                                  >
-                                    {feedback.isPublic ? (
-                                      <>
-                                        <MdVisibilityOff className="mr-2 h-4 w-4" />
-                                        Unpublish
-                                      </>
-                                    ) : (
-                                      <>
-                                        <MdVisibility className="mr-2 h-4 w-4" />
-                                        Publish
-                                      </>
-                                    )}
-                                  </DropdownMenuItem>
+                                  {!feedback.response && (
+                                    <DropdownMenuItem onClick={() => {
+                                      setSelectedFeedback(feedback);
+                                      setResponseDialogOpen(true);
+                                    }}>
+                                      <MdReply className="mr-2 h-4 w-4" />
+                                      Add Response
+                                    </DropdownMenuItem>
+                                  )}
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem 
                                     onClick={() => handleDeleteFeedback(feedback.id)}
@@ -797,10 +769,10 @@ const AdminFeedback = () => {
 
       {/* Add/Edit Feedback Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {editingFeedback ? 'Edit Product Feedback' : 'Add New Testimonial'}
+              {editingFeedback ? 'Edit Feedback' : 'Add New Feedback'}
             </DialogTitle>
             <DialogDescription>
               {editingFeedback ? 'Update feedback details' : 'Add customer feedback for a product'}
@@ -808,129 +780,69 @@ const AdminFeedback = () => {
           </DialogHeader>
           
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Customer Name</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="John Doe"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                  placeholder="customer@example.com"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="productName">Product Name</Label>
-                <Input
-                  id="productName"
-                  value={formData.productName}
-                  onChange={(e) => setFormData(prev => ({ ...prev, productName: e.target.value }))}
-                  placeholder="Product Name"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="category">Product Category</Label>
-                <Input
-                  id="category"
-                  value={formData.category}
-                  onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-                  placeholder="Category"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="productId">Product *</Label>
+              <Select 
+                value={formData.productId} 
+                onValueChange={(value) => setFormData(prev => ({ ...prev, productId: value }))}
+                required
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a product" />
+                </SelectTrigger>
+                <SelectContent>
+                  {productsArray.map(product => (
+                    <SelectItem key={product.id} value={product.id.toString()}>
+                      {product.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="message">Feedback Message</Label>
+              <Label htmlFor="rating">Rating *</Label>
+              <Select 
+                value={formData.rating.toString()} 
+                onValueChange={(value) => setFormData(prev => ({ ...prev, rating: parseInt(value) }))}
+                required
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select rating" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">★★★★★ Excellent</SelectItem>
+                  <SelectItem value="4">★★★★☆ Very Good</SelectItem>
+                  <SelectItem value="3">★★★☆☆ Good</SelectItem>
+                  <SelectItem value="2">★★☆☆☆ Fair</SelectItem>
+                  <SelectItem value="1">★☆☆☆☆ Poor</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="comment">Comment *</Label>
               <Textarea
-                id="message"
-                value={formData.message}
-                onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
-                placeholder="Customer's feedback about the product..."
+                id="comment"
+                value={formData.comment}
+                onChange={(e) => setFormData(prev => ({ ...prev, comment: e.target.value }))}
+                placeholder="Enter customer feedback..."
                 rows={4}
                 required
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="rating">Rating</Label>
-                <Select 
-                  value={formData.rating.toString()} 
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, rating: parseInt(value) }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select rating" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5">★★★★★ Excellent</SelectItem>
-                    <SelectItem value="4">★★★★☆ Very Good</SelectItem>
-                    <SelectItem value="3">★★★☆☆ Good</SelectItem>
-                    <SelectItem value="2">★★☆☆☆ Fair</SelectItem>
-                    <SelectItem value="1">★☆☆☆☆ Poor</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
-                <Select 
-                  value={formData.status} 
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="reviewed">Reviewed</SelectItem>
-                    <SelectItem value="resolved">Resolved</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="isPublic">Visibility</Label>
-                <Select 
-                  value={formData.isPublic.toString()} 
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, isPublic: value === 'true' }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select visibility" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="true">Public (Visible to all)</SelectItem>
-                    <SelectItem value="false">Private (Admin only)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="userId">User ID *</Label>
+              <Input
+                id="userId"
+                type="number"
+                value={formData.userId}
+                onChange={(e) => setFormData(prev => ({ ...prev, userId: e.target.value }))}
+                placeholder="Enter user ID"
+                required
+              />
             </div>
-
-            {editingFeedback && (
-              <div className="space-y-2">
-                <Label htmlFor="response">Admin Response</Label>
-                <Textarea
-                  id="response"
-                  value={formData.response}
-                  onChange={(e) => setFormData(prev => ({ ...prev, response: e.target.value }))}
-                  placeholder="Your response to the customer..."
-                  rows={3}
-                />
-              </div>
-            )}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={handleCloseDialog}>
@@ -950,7 +862,7 @@ const AdminFeedback = () => {
           <DialogHeader>
             <DialogTitle>Add Response</DialogTitle>
             <DialogDescription>
-              Respond to customer feedback. This will also mark the feedback as resolved.
+              Respond to customer feedback
             </DialogDescription>
           </DialogHeader>
           <Textarea
