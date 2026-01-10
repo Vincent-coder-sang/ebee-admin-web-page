@@ -63,15 +63,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  getFeedbacks,
-  deleteFeedback,
-  updateFeedback,
-  addFeedback,
-  getProducts
-} from '@/features/slices/feedbackSlice';
+
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
+import { addFeedback, deleteFeedback, getFeedbacks, updateFeedback } from '@/features/slices/feedbackSlice';
+import { fetchProducts } from '@/features/slices/productSlice';
 
 const AdminFeedback = () => {
   const dispatch = useDispatch();
@@ -109,7 +105,7 @@ const AdminFeedback = () => {
 
   useEffect(() => {
     dispatch(getFeedbacks());
-    dispatch(getProducts());
+    dispatch(fetchProducts());
   }, [dispatch]);
 
   // Get unique product names from feedbacks
