@@ -20,7 +20,10 @@ import {
 
 const AdminRentals = () => {
   const dispatch = useDispatch();
-  const { list: rentals, status } = useSelector((state) => state.rental);
+  
+  // Safe destructuring with default values
+  const { list: rentals = [], status = 'idle' } = useSelector((state) => state.rental || {});
+  
   const [searchTerm, setSearchTerm] = useState('');
 
   // Fetch rentals on component mount
@@ -32,15 +35,20 @@ const AdminRentals = () => {
   const filteredRentals = rentals.filter((rental) => {
     const searchLower = searchTerm.toLowerCase();
     return (
-      rental.customerName?.toLowerCase().includes(searchLower) ||
-      rental.vehicleModel?.toLowerCase().includes(searchLower) ||
-      rental.rentalId?.toLowerCase().includes(searchLower) ||
-      rental.status?.toLowerCase().includes(searchLower)
+      rental?.customerName?.toLowerCase().includes(searchLower) ||
+      rental?.vehicleModel?.toLowerCase().includes(searchLower) ||
+      rental?.rentalId?.toLowerCase().includes(searchLower) ||
+      rental?.status?.toLowerCase().includes(searchLower)
     );
   });
 
   // Handle rental deletion
   const handleDelete = (rentalId) => {
+    if (!rentalId) {
+      toast.error('Invalid rental ID');
+      return;
+    }
+    
     if (window.confirm('Are you sure you want to delete this rental?')) {
       dispatch(deleteRental(rentalId))
         .unwrap()
@@ -55,7 +63,9 @@ const AdminRentals = () => {
 
   // Get badge variant based on status
   const getStatusVariant = (status) => {
-    switch (status?.toLowerCase()) {
+    if (!status) return 'outline';
+    
+    switch (status.toLowerCase()) {
       case 'active':
         return 'default';
       case 'completed':
@@ -69,15 +79,33 @@ const AdminRentals = () => {
     }
   };
 
-  // Format date
+  // Format date safely
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'N/A';
+      
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'N/A';
+    }
   };
+
+  // Calculate total revenue
+  const totalRevenue = rentals
+    .filter(r => r?.status?.toLowerCase() === 'completed')
+    .reduce((sum, r) => sum + (parseFloat(r.totalAmount) || 0), 0);
+
+  // Get counts
+  const activeCount = rentals.filter(r => r?.status?.toLowerCase() === 'active').length;
+  const completedCount = rentals.filter(r => r?.status?.toLowerCase() === 'completed').length;
 
   return (
     <div className="p-6 space-y-6">
@@ -104,23 +132,16 @@ const AdminRentals = () => {
         </div>
         <div className="bg-white rounded-lg border p-4">
           <p className="text-sm text-muted-foreground">Active</p>
-          <p className="text-2xl font-bold">
-            {rentals.filter(r => r.status?.toLowerCase() === 'active').length}
-          </p>
+          <p className="text-2xl font-bold">{activeCount}</p>
         </div>
         <div className="bg-white rounded-lg border p-4">
           <p className="text-sm text-muted-foreground">Completed</p>
-          <p className="text-2xl font-bold">
-            {rentals.filter(r => r.status?.toLowerCase() === 'completed').length}
-          </p>
+          <p className="text-2xl font-bold">{completedCount}</p>
         </div>
         <div className="bg-white rounded-lg border p-4">
           <p className="text-sm text-muted-foreground">Revenue</p>
           <p className="text-2xl font-bold">
-            ${rentals
-              .filter(r => r.status?.toLowerCase() === 'completed')
-              .reduce((sum, r) => sum + (r.totalAmount || 0), 0)
-              .toLocaleString()}
+            ${totalRevenue.toLocaleString()}
           </p>
         </div>
       </div>
@@ -151,12 +172,21 @@ const AdminRentals = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredRentals.length > 0 ? (
+            {status === 'pending' ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center h-24">
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                    Loading rentals...
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : filteredRentals.length > 0 ? (
               filteredRentals.map((rental) => (
                 <TableRow key={rental.id}>
                   <TableCell className="font-medium">
                     <div className="flex flex-col">
-                      <span>#{rental.rentalId || rental.id?.slice(-6)}</span>
+                      <span>#{rental.rentalId || rental.id?.slice(-6) || 'N/A'}</span>
                       <span className="text-xs text-muted-foreground">
                         {formatDate(rental.createdAt)}
                       </span>
@@ -196,12 +226,12 @@ const AdminRentals = () => {
                   </TableCell>
                   <TableCell>
                     <span className="font-medium">
-                      ${rental.totalAmount?.toLocaleString() || '0'}
+                      ${(rental.totalAmount || 0).toLocaleString()}
                     </span>
                   </TableCell>
                   <TableCell>
                     <Badge variant={getStatusVariant(rental.status)}>
-                      {rental.status?.toUpperCase() || 'UNKNOWN'}
+                      {(rental.status || 'UNKNOWN').toUpperCase()}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -220,12 +250,7 @@ const AdminRentals = () => {
             ) : (
               <TableRow>
                 <TableCell colSpan={7} className="text-center h-24">
-                  {status === 'pending' ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                      Loading rentals...
-                    </div>
-                  ) : searchTerm ? (
+                  {searchTerm ? (
                     `No rentals found matching "${searchTerm}"`
                   ) : (
                     <div className="flex flex-col items-center gap-2">

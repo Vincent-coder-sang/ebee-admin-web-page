@@ -36,12 +36,13 @@ import {
   updateFine, 
   deleteFine 
 } from '@/features/slices/fineSlice';
-import DateRangePicker from '@/components/common/date-range-picker';
 import { toast } from 'react-toastify';
 
 const AdminFines = () => {
   const dispatch = useDispatch();
-  const { fines = [], status } = useSelector((state) => state.fine);
+  
+  // Access the fine slice - use state.fine (singular)
+  const { fines = [], status = 'idle' } = useSelector((state) => state.fine || {});
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -61,7 +62,13 @@ const AdminFines = () => {
   });
 
   useEffect(() => {
-    dispatch(getFine());
+    // Add error handling for dispatch
+    try {
+      dispatch(getFine());
+    } catch (error) {
+      console.error('Failed to fetch fines:', error);
+      toast.error('Failed to load fines data');
+    }
   }, [dispatch]);
 
   // Filter fines
@@ -90,7 +97,8 @@ const AdminFines = () => {
           (fine.user?.name?.toLowerCase().includes(searchLower)) ||
           (fine.user?.email?.toLowerCase().includes(searchLower)) ||
           (fine.rental?.id?.toString().includes(searchLower)) ||
-          (fine.id?.toString().includes(searchLower))
+          (fine.id?.toString().includes(searchLower)) ||
+          (fine._id?.toString().includes(searchLower))
         );
       }
 
@@ -165,14 +173,14 @@ const AdminFines = () => {
         toast.success('Fine created successfully!');
       })
       .catch(error => {
-        toast.error(`Error creating fine: ${error}`);
+        toast.error(`Error creating fine: ${error.message || error}`);
       });
   };
 
   const handleUpdateFine = () => {
     if (!selectedFine) return;
 
-    const fineId = selectedFine.id || selectedFine._id;
+    const fineId = selectedFine._id || selectedFine.id;
     if (!fineId) return;
 
     dispatch(updateFine({ 
@@ -189,11 +197,16 @@ const AdminFines = () => {
         toast.success('Fine updated successfully!');
       })
       .catch(error => {
-        toast.error(`Error updating fine: ${error}`);
+        toast.error(`Error updating fine: ${error.message || error}`);
       });
   };
 
   const handleDeleteFine = (fineId) => {
+    if (!fineId) {
+      toast.error('Invalid fine ID');
+      return;
+    }
+    
     if (!window.confirm('Are you sure you want to delete this fine?')) {
       return;
     }
@@ -204,16 +217,20 @@ const AdminFines = () => {
         toast.success('Fine deleted successfully!');
       })
       .catch(error => {
-        toast.error(`Error deleting fine: ${error}`);
+        toast.error(`Error deleting fine: ${error.message || error}`);
       });
   };
 
   const handleMarkAsPaid = (fine) => {
+    if (!fine) return;
+    
     if (!window.confirm('Mark this fine as paid?')) {
       return;
     }
     
-    const fineId = fine.id || fine._id;
+    const fineId = fine._id || fine.id;
+    if (!fineId) return;
+    
     dispatch(updateFine({ 
       fineId, 
       fineData: { status: 'paid' } 
@@ -223,7 +240,7 @@ const AdminFines = () => {
         toast.success('Fine marked as paid!');
       })
       .catch(error => {
-        toast.error(`Error updating fine: ${error}`);
+        toast.error(`Error updating fine: ${error.message || error}`);
       });
   };
 
@@ -248,11 +265,12 @@ const AdminFines = () => {
   };
 
   const formatCurrency = (amount) => {
+    const numAmount = parseFloat(amount) || 0;
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'KES',
       minimumFractionDigits: 2,
-    }).format(amount || 0);
+    }).format(numAmount);
   };
 
   const statusOptions = [
@@ -264,6 +282,41 @@ const AdminFines = () => {
   ];
 
   const isLoading = status === 'pending';
+
+  // Debug log to see what's in the state
+  console.log('Fine state:', { fines, status });
+
+  // If fines slice doesn't exist, show a placeholder
+  if (status === 'rejected' || (status === 'idle' && fines.length === 0)) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Fines Management</h1>
+            <p className="text-gray-600 mt-2">
+              Manage rental fines, penalties, and overdue charges
+            </p>
+          </div>
+        </div>
+        
+        <Card>
+          <CardContent className="p-8 text-center">
+            <AlertTriangle className="h-16 w-16 mx-auto text-yellow-500 mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Fines Management</h3>
+            <p className="text-gray-600 mb-4">
+              {status === 'rejected' 
+                ? 'Unable to load fines. Please try again later.'
+                : 'No fines found. Create your first fine to get started.'}
+            </p>
+            <Button onClick={() => dispatch(getFine())}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh Data
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -280,7 +333,7 @@ const AdminFines = () => {
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
-          <Button variant="outline">
+          <Button variant="outline" disabled={fines.length === 0}>
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
@@ -391,10 +444,21 @@ const AdminFines = () => {
                 />
               </div>
               
-              <DateRangePicker 
-                dateRange={dateRange}
-                onChange={setDateRange}
-              />
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  value={dateRange.start.toISOString().split('T')[0]}
+                  onChange={(e) => setDateRange({...dateRange, start: new Date(e.target.value)})}
+                  className="px-3 py-2 border rounded-lg"
+                />
+                <span className="self-center">to</span>
+                <input
+                  type="date"
+                  value={dateRange.end.toISOString().split('T')[0]}
+                  onChange={(e) => setDateRange({...dateRange, end: new Date(e.target.value)})}
+                  className="px-3 py-2 border rounded-lg"
+                />
+              </div>
               
               <div className="relative">
                 <select
@@ -470,27 +534,27 @@ const AdminFines = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredFines.map((fine) => {
-                    const fineId = fine.id || fine._id;
+                    const fineId = fine._id || fine.id;
                     const fineStatus = fine.status || 'pending';
                     
                     return (
                       <tr key={fineId} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">
-                            #{fineId}
+                            #{fineId?.slice(-6) || 'N/A'}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">
-                            {fine.user?.name || 'Unknown User'}
+                            {fine.user?.name || fine.userName || 'Unknown User'}
                           </div>
                           <div className="text-xs text-gray-500">
-                            {fine.user?.email || 'N/A'}
+                            {fine.user?.email || fine.userEmail || fine.userId || 'N/A'}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">
-                            Rental #{fine.rentalId || 'N/A'}
+                            {fine.rental?.id ? `Rental #${fine.rental.id}` : `Rental #${fine.rentalId || 'N/A'}`}
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -508,7 +572,7 @@ const AdminFines = () => {
                             <Badge className={getStatusColor(fineStatus)}>
                               <span className="flex items-center gap-1">
                                 {getStatusIcon(fineStatus)}
-                                {fineStatus}
+                                {fineStatus.charAt(0).toUpperCase() + fineStatus.slice(1)}
                               </span>
                             </Badge>
                           </div>
@@ -573,7 +637,7 @@ const AdminFines = () => {
                     User ID <span className="text-red-500">*</span>
                   </label>
                   <Input
-                    type="number"
+                    type="text"
                     value={newFine.userId}
                     onChange={(e) => setNewFine({...newFine, userId: e.target.value})}
                     placeholder="Enter user ID"
@@ -586,7 +650,7 @@ const AdminFines = () => {
                     Rental ID <span className="text-red-500">*</span>
                   </label>
                   <Input
-                    type="number"
+                    type="text"
                     value={newFine.rentalId}
                     onChange={(e) => setNewFine({...newFine, rentalId: e.target.value})}
                     placeholder="Enter rental ID"
@@ -656,7 +720,7 @@ const AdminFines = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Fine #{selectedFine.id || selectedFine._id}</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Fine #{selectedFine._id?.slice(-6) || selectedFine.id?.slice(-6) || 'N/A'}</h3>
               
               <div className="space-y-4">
                 <div>
