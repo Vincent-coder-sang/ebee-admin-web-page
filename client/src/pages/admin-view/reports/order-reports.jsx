@@ -28,9 +28,10 @@ import DateRangePicker from '@/components/common/date-range-picker';
 const OrderReports = () => {
   const dispatch = useDispatch();
   
-  // Get data from Redux stores
-  const { aggregatedData } = useSelector((state) => state.reports);
-  const { list: orders, status: ordersStatus } = useSelector((state) => state.orders);
+  // Get data from Redux stores with safe defaults
+  const reportsState = useSelector((state) => state.reports);
+  const { aggregatedData = {} } = reportsState;
+  const { list: orders = [], status: ordersStatus = 'idle' } = useSelector((state) => state.orders);
   
   const [dateRange, setDateRange] = useState({
     start: new Date(new Date().setMonth(new Date().getMonth() - 1)),
@@ -44,56 +45,89 @@ const OrderReports = () => {
     dispatch(fetchOrders());
   }, [dispatch]);
 
-  // Process orders data
+  // Process orders data - SAFE VERSION
   const processedOrders = useMemo(() => {
-    const ordersData = aggregatedData.orders && aggregatedData.orders.length > 0 
-      ? aggregatedData.orders 
-      : orders || [];
-    
-    return ordersData.map(order => ({
-      ...order,
-      revenue: parseFloat(order.total_price || 0),
-      profit: parseFloat(order.total_price || 0) * 0.25, // 25% profit margin example
-      margin: 25, // Example margin percentage
-      itemsCount: order.items?.length || 0,
-      customerName: order.user?.name || `Customer ${order.userId}`,
-      customerEmail: order.user?.email || 'N/A'
-    }));
-  }, [aggregatedData.orders, orders]);
+    try {
+      // Safely get orders data
+      let ordersData = [];
+      
+      // Check if aggregatedData.orders exists and is an array
+      if (aggregatedData && aggregatedData.orders && Array.isArray(aggregatedData.orders)) {
+        ordersData = aggregatedData.orders;
+      } 
+      // Otherwise use the orders from orderSlice
+      else if (orders && Array.isArray(orders)) {
+        ordersData = orders;
+      }
+      
+      // Process each order
+      return ordersData.map(order => ({
+        ...order,
+        id: order.id || order._id || Math.random().toString(36).substr(2, 9),
+        revenue: parseFloat(order.total_price || order.total || order.revenue || 0),
+        profit: parseFloat(order.total_price || 0) * 0.25, // 25% profit margin example
+        margin: 25, // Example margin percentage
+        itemsCount: order.items?.length || order.orderItems?.length || 0,
+        customerName: order.user?.name || order.customerName || `Customer ${order.userId || 'Unknown'}`,
+        customerEmail: order.user?.email || order.customerEmail || 'N/A',
+        status: order.status || 'pending',
+        created_at: order.created_at || order.createdAt || new Date().toISOString()
+      }));
+    } catch (error) {
+      console.error('Error processing orders:', error);
+      return [];
+    }
+  }, [aggregatedData, orders]);
 
   // Filter orders based on date range and status
   const filteredOrders = useMemo(() => {
-    return processedOrders.filter(order => {
-      // Date filter
-      if (dateRange.start && dateRange.end) {
-        const orderDate = new Date(order.created_at);
-        if (orderDate < dateRange.start || orderDate > dateRange.end) {
+    try {
+      return processedOrders.filter(order => {
+        // Date filter
+        if (dateRange.start && dateRange.end) {
+          const orderDate = new Date(order.created_at);
+          if (isNaN(orderDate.getTime())) return false;
+          
+          if (orderDate < dateRange.start || orderDate > dateRange.end) {
+            return false;
+          }
+        }
+        
+        // Status filter
+        if (statusFilter !== 'all' && order.status !== statusFilter) {
           return false;
         }
-      }
-      
-      // Status filter
-      if (statusFilter !== 'all' && order.status !== statusFilter) {
-        return false;
-      }
-      
-      // Search filter
-      if (searchTerm) {
-        const searchLower = searchTerm.toLowerCase();
-        return (
-          (order.id?.toString().includes(searchLower)) ||
-          (order.customerName?.toLowerCase().includes(searchLower)) ||
-          (order.customerEmail?.toLowerCase().includes(searchLower)) ||
-          (order.status?.toLowerCase().includes(searchLower))
-        );
-      }
-      
-      return true;
-    });
+        
+        // Search filter
+        if (searchTerm) {
+          const searchLower = searchTerm.toLowerCase();
+          return (
+            (order.id?.toString().includes(searchLower)) ||
+            (order.customerName?.toLowerCase().includes(searchLower)) ||
+            (order.customerEmail?.toLowerCase().includes(searchLower)) ||
+            (order.status?.toLowerCase().includes(searchLower))
+          );
+        }
+        
+        return true;
+      });
+    } catch (error) {
+      console.error('Error filtering orders:', error);
+      return [];
+    }
   }, [processedOrders, dateRange, statusFilter, searchTerm]);
 
   // Calculate statistics
   const stats = useMemo(() => {
+    const initialStats = {
+      totalOrders: 0,
+      totalRevenue: 0,
+      totalProfit: 0,
+      totalItems: 0,
+      averageOrderValue: 0,
+      statusCount: {}
+    };
+
     return filteredOrders.reduce((acc, order) => {
       acc.totalOrders += 1;
       acc.totalRevenue += order.revenue;
@@ -102,20 +136,14 @@ const OrderReports = () => {
       acc.averageOrderValue = acc.totalRevenue / (acc.totalOrders || 1);
       
       // Count by status
-      if (!acc.statusCount[order.status]) {
-        acc.statusCount[order.status] = 0;
+      const status = order.status || 'unknown';
+      if (!acc.statusCount[status]) {
+        acc.statusCount[status] = 0;
       }
-      acc.statusCount[order.status] += 1;
+      acc.statusCount[status] += 1;
       
       return acc;
-    }, {
-      totalOrders: 0,
-      totalRevenue: 0,
-      totalProfit: 0,
-      totalItems: 0,
-      averageOrderValue: 0,
-      statusCount: {}
-    });
+    }, initialStats);
   }, [filteredOrders]);
 
   const handleDateRangeChange = (range) => {
@@ -136,7 +164,9 @@ const OrderReports = () => {
   };
 
   const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
+    if (!status) return 'bg-gray-100 text-gray-800';
+    
+    switch (status.toLowerCase()) {
       case 'completed':
       case 'delivered':
         return 'bg-green-100 text-green-800';
@@ -161,27 +191,53 @@ const OrderReports = () => {
     { value: 'cancelled', label: 'Cancelled' }
   ];
 
-  // Calculate daily revenue for chart (mock data for now)
+  // Calculate daily revenue for chart
   const dailyRevenue = useMemo(() => {
-    const days = 30;
-    const data = [];
-    for (let i = days; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      const dayOrders = filteredOrders.filter(order => {
-        const orderDate = new Date(order.created_at);
-        return orderDate.toDateString() === date.toDateString();
-      });
-      const revenue = dayOrders.reduce((sum, order) => sum + order.revenue, 0);
-      data.push({
-        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        revenue
-      });
+    try {
+      const days = 30;
+      const data = [];
+      for (let i = days; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        date.setHours(0, 0, 0, 0);
+        
+        const dayOrders = filteredOrders.filter(order => {
+          try {
+            const orderDate = new Date(order.created_at);
+            if (isNaN(orderDate.getTime())) return false;
+            
+            orderDate.setHours(0, 0, 0, 0);
+            return orderDate.getTime() === date.getTime();
+          } catch {
+            return false;
+          }
+        });
+        
+        const revenue = dayOrders.reduce((sum, order) => sum + order.revenue, 0);
+        data.push({
+          date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          revenue
+        });
+      }
+      return data;
+    } catch (error) {
+      console.error('Error calculating daily revenue:', error);
+      return [];
     }
-    return data;
   }, [filteredOrders]);
 
   const isLoading = ordersStatus === 'pending';
+
+  // Calculate unique customers
+  const uniqueCustomers = useMemo(() => {
+    const customerIds = new Set();
+    filteredOrders.forEach(order => {
+      if (order.userId) {
+        customerIds.add(order.userId);
+      }
+    });
+    return customerIds.size;
+  }, [filteredOrders]);
 
   return (
     <div className="space-y-6">
@@ -345,22 +401,33 @@ const OrderReports = () => {
             </CardHeader>
             <CardContent>
               <div className="h-64">
-                {/* Simple bar chart using divs */}
-                <div className="flex items-end h-48 space-x-1 mt-4">
-                  {dailyRevenue.slice(-10).map((day, index) => (
-                    <div key={index} className="flex flex-col items-center flex-1">
-                      <div 
-                        className="w-full bg-blue-500 rounded-t"
-                        style={{ 
-                          height: `${Math.min(100, (day.revenue / 1000) * 100)}%`,
-                          maxHeight: '100%'
-                        }}
-                      />
-                      <div className="text-xs text-gray-500 mt-2">{day.date}</div>
-                      <div className="text-xs font-medium">${day.revenue.toFixed(0)}</div>
-                    </div>
-                  ))}
-                </div>
+                {dailyRevenue.length > 0 ? (
+                  <div className="flex items-end h-48 space-x-1 mt-4">
+                    {dailyRevenue.slice(-10).map((day, index) => {
+                      const maxRevenue = Math.max(...dailyRevenue.map(d => d.revenue), 1);
+                      const heightPercent = (day.revenue / maxRevenue) * 100;
+                      
+                      return (
+                        <div key={index} className="flex flex-col items-center flex-1">
+                          <div 
+                            className="w-full bg-blue-500 rounded-t transition-all duration-300 hover:bg-blue-600"
+                            style={{ 
+                              height: `${Math.min(100, heightPercent)}%`,
+                              maxHeight: '100%'
+                            }}
+                            title={`$${day.revenue.toFixed(2)} on ${day.date}`}
+                          />
+                          <div className="text-xs text-gray-500 mt-2">{day.date}</div>
+                          <div className="text-xs font-medium">${day.revenue.toFixed(0)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-48 text-gray-500">
+                    No revenue data available for the selected period
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -372,32 +439,38 @@ const OrderReports = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {Object.entries(stats.statusCount).map(([status, count]) => {
-                  const percentage = stats.totalOrders > 0 ? (count / stats.totalOrders * 100).toFixed(1) : 0;
-                  return (
-                    <div key={status} className="space-y-2">
-                      <div className="flex justify-between">
-                        <div className="flex items-center">
-                          <Badge className={getStatusColor(status)}>
-                            {status}
-                          </Badge>
+                {Object.entries(stats.statusCount).length > 0 ? (
+                  Object.entries(stats.statusCount).map(([status, count]) => {
+                    const percentage = stats.totalOrders > 0 ? (count / stats.totalOrders * 100).toFixed(1) : 0;
+                    return (
+                      <div key={status} className="space-y-2">
+                        <div className="flex justify-between">
+                          <div className="flex items-center">
+                            <Badge className={getStatusColor(status)}>
+                              {status}
+                            </Badge>
+                          </div>
+                          <span className="font-medium">{count} ({percentage}%)</span>
                         </div>
-                        <span className="font-medium">{count} ({percentage}%)</span>
+                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full ${
+                              status === 'delivered' || status === 'completed' ? 'bg-green-500' :
+                              status === 'shipped' ? 'bg-blue-500' :
+                              status === 'processing' ? 'bg-yellow-500' :
+                              'bg-red-500'
+                            }`}
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
                       </div>
-                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full ${
-                            status === 'delivered' || status === 'completed' ? 'bg-green-500' :
-                            status === 'shipped' ? 'bg-blue-500' :
-                            status === 'processing' ? 'bg-yellow-500' :
-                            'bg-red-500'
-                          }`}
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-4 text-gray-500">
+                    No status data available
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -408,74 +481,81 @@ const OrderReports = () => {
               <CardTitle>Top Performing Orders</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Order ID
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Customer
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Revenue
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Profit
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Margin
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Status
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredOrders
-                      .sort((a, b) => b.revenue - a.revenue)
-                      .slice(0, 5)
-                      .map((order) => (
-                        <tr key={order.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">
-                              #{order.id || order._id}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">
-                              {order.customerName}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {order.customerEmail}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-bold text-green-600">
-                              ${order.revenue.toFixed(2)}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-purple-600">
-                              ${order.profit.toFixed(2)}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-blue-600">
-                              {order.margin}%
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <Badge className={getStatusColor(order.status)}>
-                              {order.status || 'Pending'}
-                            </Badge>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
+              {filteredOrders.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Order ID
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Customer
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Revenue
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Profit
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Margin
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Status
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {filteredOrders
+                        .sort((a, b) => b.revenue - a.revenue)
+                        .slice(0, 5)
+                        .map((order) => (
+                          <tr key={order.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900">
+                                #{order.id}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900">
+                                {order.customerName}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {order.customerEmail}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-bold text-green-600">
+                                ${order.revenue.toFixed(2)}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-purple-600">
+                                ${order.profit.toFixed(2)}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-blue-600">
+                                {order.margin}%
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <Badge className={getStatusColor(order.status)}>
+                                {order.status || 'Pending'}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <DollarSign className="h-12 w-12 mx-auto text-gray-300 mb-3" />
+                  <p>No orders found to display</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -484,11 +564,23 @@ const OrderReports = () => {
         <Card>
           <CardContent className="p-0">
             {isLoading ? (
-              <div className="p-8 text-center text-gray-500">Loading order reports...</div>
+              <div className="p-8 text-center text-gray-500">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p className="mt-2">Loading order reports...</p>
+              </div>
             ) : filteredOrders.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
                 <BarChart3 className="h-12 w-12 mx-auto text-gray-300 mb-3" />
                 <p>No orders found for the selected filters</p>
+                {searchTerm && (
+                  <Button 
+                    variant="outline" 
+                    className="mt-2"
+                    onClick={() => setSearchTerm('')}
+                  >
+                    Clear Search
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -529,7 +621,7 @@ const OrderReports = () => {
                       <tr key={order.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">
-                            #{order.id || order._id}
+                            #{order.id}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -537,7 +629,10 @@ const OrderReports = () => {
                             {new Date(order.created_at).toLocaleDateString()}
                           </div>
                           <div className="text-xs text-gray-500">
-                            {new Date(order.created_at).toLocaleTimeString()}
+                            {new Date(order.created_at).toLocaleTimeString([], { 
+                              hour: '2-digit', 
+                              minute: '2-digit' 
+                            })}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -651,7 +746,7 @@ const OrderReports = () => {
                 <div className="flex items-start">
                   <Users className="h-4 w-4 text-blue-500 mr-2 mt-0.5" />
                   <span className="text-sm text-gray-600">
-                    <strong>{filteredOrders.length}</strong> orders from <strong>{new Set(filteredOrders.map(o => o.userId)).size}</strong> unique customers
+                    <strong>{filteredOrders.length}</strong> orders from <strong>{uniqueCustomers}</strong> unique customers
                   </span>
                 </div>
                 <div className="flex items-start">

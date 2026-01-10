@@ -2,11 +2,13 @@
 // src/pages/admin/reports/ServiceBookingReports.jsx
 import React, { useEffect, useState, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-
-
-import { exportReportData, setFilters, filterPurchaseOrders  } from '@/features/slices/reportSlice';
-
-
+import { 
+  exportReportData, 
+  setFilters, 
+  filterPurchaseOrders  
+} from '@/features/slices/reportSlice';
+import { getBookings } from '@/features/slices/bookingSlice';
+import DateRangePicker from '@/components/common/date-range-picker';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -28,15 +30,14 @@ import {
   TrendingUp,
   Calendar as CalendarIcon
 } from 'lucide-react';
-import { getBookings } from '@/features/slices/bookingSlice';
-import DateRangePicker from '@/components/common/date-range-picker';
 
 const ServiceBookingReports = () => {
   const dispatch = useDispatch();
   
-  // Get data from Redux stores
-  const { aggregatedData } = useSelector((state) => state.reports);
-  const { list: bookings, status: bookingsStatus } = useSelector((state) => state.bookings);
+  // Get data from Redux stores with safe defaults
+  const reportsState = useSelector((state) => state.reports);
+  const { aggregatedData = {} } = reportsState;
+  const { list: bookings = [], status: bookingsStatus = 'idle' } = useSelector((state) => state.bookings);
   
   const [dateRange, setDateRange] = useState({
     start: new Date(new Date().setMonth(new Date().getMonth() - 1)),
@@ -51,91 +52,162 @@ const ServiceBookingReports = () => {
     dispatch(getBookings());
   }, [dispatch]);
 
-  // Process bookings data
+  // Process bookings data - SAFE VERSION
   const processedBookings = useMemo(() => {
-    const bookingsData = aggregatedData.bookings && aggregatedData.bookings.length > 0 
-      ? aggregatedData.bookings 
-      : bookings || [];
-    
-    return bookingsData.map(booking => ({
-      ...booking,
-      customerName: booking.user?.name || `Customer ${booking.userId}`,
-      customerEmail: booking.user?.email || 'N/A',
-      serviceName: booking.service?.name || `Service ${booking.serviceId}`,
-      servicePrice: parseFloat(booking.price || 0),
-      scheduledDate: booking.scheduled_date || booking.date || booking.created_at,
-      duration: booking.duration || '1 hour',
-      technician: booking.technician || 'Not assigned'
-    }));
-  }, [aggregatedData.bookings, bookings]);
+    try {
+      // Safely get bookings data
+      let bookingsData = [];
+      
+      // Check if aggregatedData.bookings exists and is an array
+      if (aggregatedData && aggregatedData.bookings && Array.isArray(aggregatedData.bookings)) {
+        bookingsData = aggregatedData.bookings;
+      } 
+      // Otherwise use the bookings from bookingSlice
+      else if (bookings && Array.isArray(bookings)) {
+        bookingsData = bookings;
+      }
+      
+      // Process each booking
+      return bookingsData.map(booking => ({
+        ...booking,
+        id: booking.id || booking._id || Math.random().toString(36).substr(2, 9),
+        customerName: booking.user?.name || booking.customerName || `Customer ${booking.userId || 'Unknown'}`,
+        customerEmail: booking.user?.email || booking.customerEmail || 'N/A',
+        serviceName: booking.service?.name || booking.serviceName || `Service ${booking.serviceId || 'Unknown'}`,
+        servicePrice: parseFloat(booking.price || booking.servicePrice || 0),
+        scheduledDate: booking.scheduled_date || booking.date || booking.scheduledDate || booking.created_at || new Date().toISOString(),
+        duration: booking.duration || '1 hour',
+        technician: booking.technician || 'Not assigned',
+        status: booking.status || 'pending'
+      }));
+    } catch (error) {
+      console.error('Error processing bookings:', error);
+      return [];
+    }
+  }, [aggregatedData, bookings]);
 
   // Filter bookings based on criteria
   const filteredBookings = useMemo(() => {
-    return processedBookings.filter(booking => {
-      // Date filter
-      if (dateRange.start && dateRange.end) {
-        const bookingDate = new Date(booking.scheduledDate || booking.created_at);
-        if (bookingDate < dateRange.start || bookingDate > dateRange.end) {
+    try {
+      return processedBookings.filter(booking => {
+        // Date filter
+        if (dateRange.start && dateRange.end) {
+          const bookingDate = new Date(booking.scheduledDate);
+          if (isNaN(bookingDate.getTime())) return false;
+          
+          if (bookingDate < dateRange.start || bookingDate > dateRange.end) {
+            return false;
+          }
+        }
+        
+        // Status filter
+        if (statusFilter !== 'all' && booking.status !== statusFilter) {
           return false;
         }
-      }
-      
-      // Status filter
-      if (statusFilter !== 'all' && booking.status !== statusFilter) {
-        return false;
-      }
-      
-      // Service type filter (simplified)
-      if (serviceTypeFilter !== 'all') {
-        // This would need actual service type data from your backend
-        if (booking.serviceType !== serviceTypeFilter) {
-          return false;
+        
+        // Service type filter (simplified)
+        if (serviceTypeFilter !== 'all') {
+          // This would need actual service type data from your backend
+          if (booking.serviceType && booking.serviceType !== serviceTypeFilter) {
+            return false;
+          }
         }
-      }
-      
-      // Search filter
-      if (searchTerm) {
-        const searchLower = searchTerm.toLowerCase();
-        return (
-          (booking.id?.toString().includes(searchLower)) ||
-          (booking.customerName?.toLowerCase().includes(searchLower)) ||
-          (booking.customerEmail?.toLowerCase().includes(searchLower)) ||
-          (booking.serviceName?.toLowerCase().includes(searchLower)) ||
-          (booking.technician?.toLowerCase().includes(searchLower))
-        );
-      }
-      
-      return true;
-    });
+        
+        // Search filter
+        if (searchTerm) {
+          const searchLower = searchTerm.toLowerCase();
+          return (
+            (booking.id?.toString().includes(searchLower)) ||
+            (booking.customerName?.toLowerCase().includes(searchLower)) ||
+            (booking.customerEmail?.toLowerCase().includes(searchLower)) ||
+            (booking.serviceName?.toLowerCase().includes(searchLower)) ||
+            (booking.technician?.toLowerCase().includes(searchLower))
+          );
+        }
+        
+        return true;
+      });
+    } catch (error) {
+      console.error('Error filtering bookings:', error);
+      return [];
+    }
   }, [processedBookings, dateRange, statusFilter, serviceTypeFilter, searchTerm]);
 
   // Calculate statistics
   const stats = useMemo(() => {
-    return filteredBookings.reduce((acc, booking) => {
-      acc.totalBookings += 1;
-      acc.totalRevenue += booking.servicePrice;
-      
-      // Count by status
-      if (!acc.statusCount[booking.status]) {
-        acc.statusCount[booking.status] = 0;
-      }
-      acc.statusCount[booking.status] += 1;
-      
-      // Count completed vs cancelled
-      if (booking.status === 'completed' || booking.status === 'confirmed') {
-        acc.completed += 1;
-      } else if (booking.status === 'cancelled') {
-        acc.cancelled += 1;
-      }
-      
-      return acc;
-    }, {
+    const initialStats = {
       totalBookings: 0,
       totalRevenue: 0,
       completed: 0,
       cancelled: 0,
       statusCount: {}
+    };
+
+    return filteredBookings.reduce((acc, booking) => {
+      acc.totalBookings += 1;
+      acc.totalRevenue += booking.servicePrice;
+      
+      // Count by status
+      const status = booking.status || 'unknown';
+      if (!acc.statusCount[status]) {
+        acc.statusCount[status] = 0;
+      }
+      acc.statusCount[status] += 1;
+      
+      // Count completed vs cancelled
+      if (status === 'completed' || status === 'confirmed') {
+        acc.completed += 1;
+      } else if (status === 'cancelled') {
+        acc.cancelled += 1;
+      }
+      
+      return acc;
+    }, initialStats);
+  }, [filteredBookings]);
+
+  // Get upcoming bookings (next 7 days)
+  const upcomingBookings = useMemo(() => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const nextWeek = new Date(today);
+      nextWeek.setDate(today.getDate() + 7);
+      
+      return filteredBookings.filter(booking => {
+        try {
+          const bookingDate = new Date(booking.scheduledDate);
+          if (isNaN(bookingDate.getTime())) return false;
+          
+          bookingDate.setHours(0, 0, 0, 0);
+          return bookingDate >= today && bookingDate <= nextWeek;
+        } catch {
+          return false;
+        }
+      });
+    } catch (error) {
+      console.error('Error calculating upcoming bookings:', error);
+      return [];
+    }
+  }, [filteredBookings]);
+
+  // Group bookings by date for calendar view
+  const bookingsByDate = useMemo(() => {
+    const grouped = {};
+    filteredBookings.forEach(booking => {
+      try {
+        const date = new Date(booking.scheduledDate);
+        if (!isNaN(date.getTime())) {
+          const dateStr = date.toDateString();
+          if (!grouped[dateStr]) {
+            grouped[dateStr] = [];
+          }
+          grouped[dateStr].push(booking);
+        }
+      } catch (error) {
+        console.error('Error grouping booking by date:', error);
+      }
     });
+    return grouped;
   }, [filteredBookings]);
 
   const handleDateRangeChange = (range) => {
@@ -156,7 +228,9 @@ const ServiceBookingReports = () => {
   };
 
   const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
+    if (!status) return 'bg-gray-100 text-gray-800';
+    
+    switch (status.toLowerCase()) {
       case 'completed':
       case 'confirmed':
         return 'bg-green-100 text-green-800';
@@ -174,7 +248,9 @@ const ServiceBookingReports = () => {
   };
 
   const getStatusIcon = (status) => {
-    switch (status?.toLowerCase()) {
+    if (!status) return <Clock className="h-4 w-4" />;
+    
+    switch (status.toLowerCase()) {
       case 'completed':
         return <CheckCircle className="h-4 w-4" />;
       case 'confirmed':
@@ -207,32 +283,23 @@ const ServiceBookingReports = () => {
     { value: 'inspection', label: 'Inspection' }
   ];
 
-  // Group bookings by date for calendar view
-  const bookingsByDate = useMemo(() => {
-    const grouped = {};
-    filteredBookings.forEach(booking => {
-      const date = new Date(booking.scheduledDate).toDateString();
-      if (!grouped[date]) {
-        grouped[date] = [];
-      }
-      grouped[date].push(booking);
-    });
-    return grouped;
-  }, [filteredBookings]);
-
-  // Get upcoming bookings (next 7 days)
-  const upcomingBookings = useMemo(() => {
-    const today = new Date();
-    const nextWeek = new Date(today);
-    nextWeek.setDate(today.getDate() + 7);
-    
-    return filteredBookings.filter(booking => {
-      const bookingDate = new Date(booking.scheduledDate);
-      return bookingDate >= today && bookingDate <= nextWeek;
-    });
-  }, [filteredBookings]);
-
   const isLoading = bookingsStatus === 'pending';
+
+  // Generate 35 days for calendar view (5 weeks)
+  const calendarDays = useMemo(() => {
+    const days = [];
+    const today = new Date();
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - today.getDay()); // Start from Sunday
+    
+    for (let i = 0; i < 35; i++) {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + i);
+      days.push(date);
+    }
+    
+    return days;
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -316,7 +383,9 @@ const ServiceBookingReports = () => {
                 <h3 className="text-2xl font-bold">{stats.completed}</h3>
                 <div className="flex items-center mt-1">
                   <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
-                  <span className="text-sm text-green-600">{stats.totalBookings > 0 ? ((stats.completed / stats.totalBookings) * 100).toFixed(0) : 0}% completion rate</span>
+                  <span className="text-sm text-green-600">
+                    {stats.totalBookings > 0 ? ((stats.completed / stats.totalBookings) * 100).toFixed(0) : 0}% completion rate
+                  </span>
                 </div>
               </div>
               <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
@@ -424,11 +493,9 @@ const ServiceBookingReports = () => {
                     ))}
                   </div>
                   
-                  {/* Calendar Grid - Simplified 5-week view */}
+                  {/* Calendar Grid */}
                   <div className="grid grid-cols-7 gap-1">
-                    {Array.from({ length: 35 }).map((_, index) => {
-                      const date = new Date();
-                      date.setDate(date.getDate() - date.getDay() + index);
+                    {calendarDays.map((date, index) => {
                       const dateStr = date.toDateString();
                       const dayBookings = bookingsByDate[dateStr] || [];
                       
@@ -525,11 +592,23 @@ const ServiceBookingReports = () => {
         <Card>
           <CardContent className="p-0">
             {isLoading ? (
-              <div className="p-8 text-center text-gray-500">Loading service bookings...</div>
+              <div className="p-8 text-center text-gray-500">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p className="mt-2">Loading service bookings...</p>
+              </div>
             ) : filteredBookings.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
                 <Wrench className="h-12 w-12 mx-auto text-gray-300 mb-3" />
                 <p>No service bookings found for the selected filters</p>
+                {searchTerm && (
+                  <Button 
+                    variant="outline" 
+                    className="mt-2"
+                    onClick={() => setSearchTerm('')}
+                  >
+                    Clear Search
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -570,7 +649,7 @@ const ServiceBookingReports = () => {
                       <tr key={booking.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">
-                            #{booking.id || booking._id}
+                            #{booking.id}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -578,7 +657,10 @@ const ServiceBookingReports = () => {
                             {new Date(booking.scheduledDate).toLocaleDateString()}
                           </div>
                           <div className="text-xs text-gray-500">
-                            {new Date(booking.scheduledDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {new Date(booking.scheduledDate).toLocaleTimeString([], { 
+                              hour: '2-digit', 
+                              minute: '2-digit' 
+                            })}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -644,12 +726,14 @@ const ServiceBookingReports = () => {
           <CardContent>
             <div className="space-y-4">
               {Object.entries(stats.statusCount).map(([status, count]) => {
-                const percentage = stats.totalBookings > 0 ? (count / stats.totalBookings * 100).toFixed(1) : 0;
+                const percentage = stats.totalBookings > 0 
+                  ? (count / stats.totalBookings * 100).toFixed(1) 
+                  : 0;
                 return (
                   <div key={status} className="space-y-2">
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-2">
-                        <div className={getStatusColor(status) + ' px-2 py-1 rounded text-xs'}>
+                        <div className={`${getStatusColor(status)} px-2 py-1 rounded text-xs`}>
                           {status}
                         </div>
                       </div>
@@ -672,6 +756,11 @@ const ServiceBookingReports = () => {
                   </div>
                 );
               })}
+              {Object.keys(stats.statusCount).length === 0 && (
+                <div className="text-center py-4 text-gray-500">
+                  No status data available
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -686,7 +775,9 @@ const ServiceBookingReports = () => {
               {/* This would use actual technician data from your system */}
               {['John Technician', 'Sarah Engineer', 'Mike Specialist'].map((tech, index) => {
                 const techBookings = filteredBookings.filter(b => b.technician === tech);
-                const completed = techBookings.filter(b => b.status === 'completed').length;
+                const completed = techBookings.filter(b => 
+                  b.status === 'completed' || b.status === 'confirmed'
+                ).length;
                 const total = techBookings.length;
                 const completionRate = total > 0 ? ((completed / total) * 100).toFixed(0) : 0;
                 
@@ -709,9 +800,11 @@ const ServiceBookingReports = () => {
                 );
               })}
               
-              <Button variant="outline" className="w-full">
-                View All Technicians
-              </Button>
+              {filteredBookings.length > 0 && (
+                <Button variant="outline" className="w-full">
+                  View All Technicians
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
