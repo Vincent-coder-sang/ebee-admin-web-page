@@ -4,8 +4,9 @@ import { toast } from "react-toastify";
 import { setHeaders, url } from "./api";
 
 const initialState = {
-  list: [],  // Changed to maintain consistency
+  list: [],
   status: null,
+  error: null,
 };
 
 export const getFeedback = createAsyncThunk(
