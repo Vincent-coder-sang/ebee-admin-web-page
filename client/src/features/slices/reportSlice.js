@@ -5,19 +5,14 @@ import { toast } from "react-toastify";
 import { setHeaders, url } from "./api";
 
 const initialState = {
-  // Reports from Reports table
-  reports: [],
+  // Report data
+  purchaseOrders: [],
+  serviceBookings: [],
+  orderReports: [],
+  customReports: [],
   
-  // Aggregated data from other slices
-  aggregatedData: {
-    orders: [],
-    bookings: [],
-    rentals: [],
-    products: [],
-    services: [],
-    feedbacks: [],
-    users: []
-  },
+  // Generated reports from backend
+  generatedReports: [],
   
   // Summary statistics
   summary: {
@@ -31,17 +26,12 @@ const initialState = {
     totalRentals: 0
   },
   
-  // Filtered reports
-  purchaseOrders: [],
-  serviceBookings: [],
-  orderReports: [],
-  
   // Filters
   filters: {
     dateRange: { start: null, end: null },
     status: null,
     type: null,
-    reportType: null // orders, rentals, payments, inventory, feedback, custom
+    reportType: null
   },
   
   // Loading states
@@ -50,98 +40,36 @@ const initialState = {
   error: null
 };
 
-// Get all reports from Reports table
-export const getReports = createAsyncThunk(
-  "reports/getReports",
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await axios.get(`${url}/report/get`, setHeaders());
-      return response.data.data || [];
-    } catch (error) {
-      const message = error.response?.data?.message || "Failed to fetch reports";
-      toast.error(message, { position: "top-center" });
-      return rejectWithValue(message);
-    }
-  }
-);
-
-// Create a new report
-export const createReport = createAsyncThunk(
-  "reports/createReport",
-  async (reportData, { rejectWithValue }) => {
-    try {
-      const response = await axios.post(
-        `${url}/report/create`,
-        reportData,
-        setHeaders()
-      );
-      toast.success("Report created successfully!", { position: "top-center" });
-      return response.data.data;
-    } catch (error) {
-      const message = error.response?.data?.message || "Failed to create report";
-      toast.error(message, { position: "top-center" });
-      return rejectWithValue(message);
-    }
-  }
-);
-
-// Delete a report
-export const deleteReport = createAsyncThunk(
-  "reports/deleteReport",
-  async (reportId, { rejectWithValue }) => {
-    try {
-      const response = await axios.delete(
-        `${url}/report/delete/${reportId}`,
-        setHeaders()
-      );
-      toast.success("Report deleted successfully!", { position: "top-center" });
-      return reportId;
-    } catch (error) {
-      const message = error.response?.data?.message || "Failed to delete report";
-      toast.error(message, { position: "top-center" });
-      return rejectWithValue(message);
-    }
-  }
-);
-
-// Fetch aggregated data from all slices for reporting
+// Get aggregated data for reports
 export const getAggregatedReportData = createAsyncThunk(
   "reports/getAggregatedData",
   async (_, { rejectWithValue }) => {
     try {
-      // Fetch all data in parallel
-      const [ordersRes, bookingsRes, usersRes, productsRes, servicesRes, feedbacksRes, rentalsRes] = await Promise.all([
+      // Fetch all data needed for reports
+      const [ordersRes, bookingsRes, servicesRes, feedbacksRes, usersRes] = await Promise.all([
         axios.get(`${url}/orders/get`, setHeaders()),
         axios.get(`${url}/bookings/get`, setHeaders()),
-        axios.get(`${url}/users/get`, setHeaders()),
-        axios.get(`${url}/products/get`, setHeaders()),
         axios.get(`${url}/services/get`, setHeaders()),
         axios.get(`${url}/feedbacks/get`, setHeaders()),
-        axios.get(`${url}/rental/get`, setHeaders())
+        axios.get(`${url}/users/get`, setHeaders())
       ]);
-
-      // Calculate total revenue from orders
-      const totalRevenue = (ordersRes.data.data || []).reduce((sum, order) => {
-        return sum + (parseFloat(order.total_price) || 0);
-      }, 0);
 
       return {
         orders: ordersRes.data.data || [],
         bookings: bookingsRes.data.data || [],
-        users: usersRes.data.data || [],
-        products: productsRes.data.data || [],
         services: servicesRes.data.data || [],
         feedbacks: feedbacksRes.data.data || [],
-        rentals: rentalsRes.data.data || [],
+        users: usersRes.data.data || [],
         summary: {
           totalOrders: (ordersRes.data.data || []).length,
           totalBookings: (bookingsRes.data.data || []).length,
-          totalRevenue,
+          totalRevenue: (ordersRes.data.data || []).reduce((sum, order) => 
+            sum + (parseFloat(order.total_price) || 0), 0),
           totalUsers: (usersRes.data.data || []).length,
-          totalProducts: (productsRes.data.data || []).length,
+          totalProducts: 0, // Add if you have products endpoint
           totalServices: (servicesRes.data.data || []).length,
           totalFeedbacks: (feedbacksRes.data.data || []).length,
-          totalRentals: (rentalsRes.data.data || []).length
+          totalRentals: 0 // Add if you have rentals endpoint
         }
       };
     } catch (error) {
@@ -152,15 +80,54 @@ export const getAggregatedReportData = createAsyncThunk(
   }
 );
 
-// Filter purchase orders (from aggregated orders data)
+// Generate sales report (using new backend)
+export const generateSalesReport = createAsyncThunk(
+  "reports/generateSalesReport",
+  async ({ startDate, endDate, format = 'pdf' }, { rejectWithValue }) => {
+    try {
+      const response = await axios.post(
+        `${url}/reports/generate/sales`,
+        { startDate, endDate, format },
+        setHeaders()
+      );
+      toast.success("Sales report generated successfully!", { position: "top-center" });
+      return response.data.data;
+    } catch (error) {
+      const message = error.response?.data?.message || "Failed to generate sales report";
+      toast.error(message, { position: "top-center" });
+      return rejectWithValue(message);
+    }
+  }
+);
+
+// Generate feedback report
+export const generateFeedbackReport = createAsyncThunk(
+  "reports/generateFeedbackReport",
+  async ({ minRating = 0, format = 'pdf' }, { rejectWithValue }) => {
+    try {
+      const response = await axios.post(
+        `${url}/reports/generate/feedback`,
+        { minRating, format },
+        setHeaders()
+      );
+      toast.success("Feedback report generated successfully!", { position: "top-center" });
+      return response.data.data;
+    } catch (error) {
+      const message = error.response?.data?.message || "Failed to generate feedback report";
+      toast.error(message, { position: "top-center" });
+      return rejectWithValue(message);
+    }
+  }
+);
+
+// Filter purchase orders
 export const filterPurchaseOrders = createAsyncThunk(
   "reports/filterPurchaseOrders",
   async (filters = {}, { getState, rejectWithValue }) => {
     try {
       const state = getState();
-      let orders = state.reports.aggregatedData.orders || [];
+      let orders = state.reports.orders || [];
       
-      // Apply date filter
       if (filters.dateRange?.start && filters.dateRange?.end) {
         orders = orders.filter(order => {
           if (!order.created_at) return true;
@@ -170,7 +137,6 @@ export const filterPurchaseOrders = createAsyncThunk(
         });
       }
       
-      // Apply status filter
       if (filters.status) {
         orders = orders.filter(order => order.status === filters.status);
       }
@@ -183,15 +149,14 @@ export const filterPurchaseOrders = createAsyncThunk(
   }
 );
 
-// Filter service bookings (from aggregated bookings data)
+// Filter service bookings
 export const filterServiceBookings = createAsyncThunk(
   "reports/filterServiceBookings",
   async (filters = {}, { getState, rejectWithValue }) => {
     try {
       const state = getState();
-      let bookings = state.reports.aggregatedData.bookings || [];
+      let bookings = state.reports.bookings || [];
       
-      // Apply date filter
       if (filters.dateRange?.start && filters.dateRange?.end) {
         bookings = bookings.filter(booking => {
           if (!booking.created_at) return true;
@@ -201,7 +166,6 @@ export const filterServiceBookings = createAsyncThunk(
         });
       }
       
-      // Apply status filter
       if (filters.status) {
         bookings = bookings.filter(booking => booking.status === filters.status);
       }
@@ -214,36 +178,10 @@ export const filterServiceBookings = createAsyncThunk(
   }
 );
 
-// Generate custom report
-export const generateCustomReport = createAsyncThunk(
-  "reports/generateCustomReport",
-  async (reportData, { rejectWithValue }) => {
-    try {
-      const response = await axios.post(
-        `${url}/report/generate`,
-        reportData,
-        setHeaders()
-      );
-      toast.success("Custom report generated successfully!", { position: "top-center" });
-      return response.data.data;
-    } catch (error) {
-      const message = error.response?.data?.message || "Failed to generate custom report";
-      toast.error(message, { position: "top-center" });
-      return rejectWithValue(message);
-    }
-  }
-);
-
-// Export report data - FIXED VERSION
+// Export report data
 export const exportReportData = createAsyncThunk(
   "reports/exportData",
-  async ({ 
-    type, 
-    data, 
-    format = 'csv', 
-    fileName = 'report',
-    customHeaders = null  // Fixed: added customHeaders parameter
-  }, { rejectWithValue }) => {
+  async ({ type, data, fileName = 'report', format = 'csv' }, { rejectWithValue }) => {
     try {
       let csvContent = "data:text/csv;charset=utf-8,";
       let headers = [];
@@ -274,17 +212,6 @@ export const exportReportData = createAsyncThunk(
           ]);
           break;
           
-        case 'custom':
-          // Fixed: Use customHeaders if provided, otherwise use default headers
-          headers = customHeaders || ["ID", "Date", "Type", "Content"];
-          rows = data.map(report => [
-            report.id || report._id || 'N/A',
-            new Date(report.createdAt || report.created_at).toLocaleDateString(),
-            report.type || 'custom',
-            report.content?.substring(0, 100) + '...' || 'No content'
-          ]);
-          break;
-          
         default:
           headers = ["ID", "Date", "Type", "Details"];
           rows = data.map(item => [
@@ -300,7 +227,6 @@ export const exportReportData = createAsyncThunk(
         csvContent += row.map(cell => `"${cell}"`).join(',') + '\n';
       });
 
-      // Create download link
       const encodedUri = encodeURI(csvContent);
       const link = document.createElement("a");
       link.setAttribute("href", encodedUri);
@@ -336,50 +262,25 @@ const reportsSlice = createSlice({
     },
     setReportType: (state, action) => {
       state.filters.reportType = action.payload;
-    },
-    // Add this reducer to directly update purchaseOrders
-    setPurchaseOrders: (state, action) => {
-      state.purchaseOrders = action.payload;
-    },
-    // Add this reducer to directly update serviceBookings
-    setServiceBookings: (state, action) => {
-      state.serviceBookings = action.payload;
     }
   },
   extraReducers: (builder) => {
     builder
-      // Get Reports
-      .addCase(getReports.pending, (state) => {
-        state.loading = true;
-        state.status = "pending";
-      })
-      .addCase(getReports.fulfilled, (state, action) => {
-        state.loading = false;
-        state.status = "success";
-        state.reports = action.payload;
-      })
-      .addCase(getReports.rejected, (state, action) => {
-        state.loading = false;
-        state.status = "rejected";
-        state.error = action.payload;
-      })
-
       // Get Aggregated Data
       .addCase(getAggregatedReportData.pending, (state) => {
         state.loading = true;
       })
       .addCase(getAggregatedReportData.fulfilled, (state, action) => {
         state.loading = false;
-        state.aggregatedData = {
-          orders: action.payload.orders,
-          bookings: action.payload.bookings,
-          users: action.payload.users,
-          products: action.payload.products,
-          services: action.payload.services,
-          feedbacks: action.payload.feedbacks,
-          rentals: action.payload.rentals
-        };
+        state.purchaseOrders = action.payload.orders;
+        state.serviceBookings = action.payload.bookings;
         state.summary = action.payload.summary;
+        // Store raw data for other report types
+        state.orders = action.payload.orders;
+        state.bookings = action.payload.bookings;
+        state.services = action.payload.services;
+        state.feedbacks = action.payload.feedbacks;
+        state.users = action.payload.users;
       })
       .addCase(getAggregatedReportData.rejected, (state, action) => {
         state.loading = false;
@@ -412,50 +313,30 @@ const reportsSlice = createSlice({
         state.error = action.payload;
       })
 
-      // Create Report
-      .addCase(createReport.pending, (state) => {
-        state.loading = true;
+      // Generate Sales Report
+      .addCase(generateSalesReport.pending, (state) => {
         state.status = "pending";
       })
-      .addCase(createReport.fulfilled, (state, action) => {
-        state.loading = false;
+      .addCase(generateSalesReport.fulfilled, (state, action) => {
         state.status = "success";
-        state.reports.unshift(action.payload);
+        state.generatedReports.push(action.payload);
+        toast.success("Sales report ready for download!");
       })
-      .addCase(createReport.rejected, (state, action) => {
-        state.loading = false;
+      .addCase(generateSalesReport.rejected, (state, action) => {
         state.status = "rejected";
         state.error = action.payload;
       })
 
-      // Delete Report
-      .addCase(deleteReport.pending, (state) => {
-        state.loading = true;
+      // Generate Feedback Report
+      .addCase(generateFeedbackReport.pending, (state) => {
         state.status = "pending";
       })
-      .addCase(deleteReport.fulfilled, (state, action) => {
-        state.loading = false;
+      .addCase(generateFeedbackReport.fulfilled, (state, action) => {
         state.status = "success";
-        state.reports = state.reports.filter(report => report.id !== action.payload);
+        state.generatedReports.push(action.payload);
+        toast.success("Feedback report ready for download!");
       })
-      .addCase(deleteReport.rejected, (state, action) => {
-        state.loading = false;
-        state.status = "rejected";
-        state.error = action.payload;
-      })
-
-      // Generate Custom Report
-      .addCase(generateCustomReport.pending, (state) => {
-        state.loading = true;
-        state.status = "pending";
-      })
-      .addCase(generateCustomReport.fulfilled, (state, action) => {
-        state.loading = false;
-        state.status = "success";
-        state.reports.unshift(action.payload);
-      })
-      .addCase(generateCustomReport.rejected, (state, action) => {
-        state.loading = false;
+      .addCase(generateFeedbackReport.rejected, (state, action) => {
         state.status = "rejected";
         state.error = action.payload;
       })
@@ -474,11 +355,5 @@ const reportsSlice = createSlice({
   }
 });
 
-export const { 
-  setFilters, 
-  clearFilters, 
-  setReportType,
-  setPurchaseOrders,
-  setServiceBookings 
-} = reportsSlice.actions;
+export const { setFilters, clearFilters, setReportType } = reportsSlice.actions;
 export default reportsSlice.reducer;

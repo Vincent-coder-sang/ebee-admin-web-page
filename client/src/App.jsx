@@ -29,10 +29,9 @@ import Adminsalesmanagement from "./pages/admin-view/management/sales/sales";
 import OrderReports from "./pages/admin-view/reports/order-reports";
 import ServiceBookingReports from "./pages/admin-view/reports/service-booking-reports";
 import PurchaseOrdersReport from "./pages/admin-view/reports/purchase-order-reports";
-import CustomReports from "./pages/admin-view/reports/custom-report";
+// CustomReports has been removed as it's not aligned with the new system
 
 const App = ({ isAuthenticated, user }) => {
-  // Remove unused props
   const dispatch = useDispatch();
   const userLoaded = useSelector((state) => state.auth.userLoaded);
 
@@ -94,7 +93,7 @@ const App = ({ isAuthenticated, user }) => {
 
         {/* admin pages */}
         <Route
-          path="/admin/*" // Use /* to catch all admin sub-routes
+          path="/admin/*"
           element={
             <CheckAuth
               isAuthenticated={isAuthenticated}
@@ -106,25 +105,26 @@ const App = ({ isAuthenticated, user }) => {
             </CheckAuth>
           }
         >
-            {/* Dashboard */}
-  <Route path="dashboard" element={<AdminDashboard />} />
-  
-  {/* Reports Section */}
-  <Route path="reports" element={<AdminReports />} />
-  <Route path="reports/purchase-orders" element={<PurchaseOrdersReport />} />
-  <Route path="reports/service-bookings" element={<ServiceBookingReports />} />
-  <Route path="reports/orders" element={<OrderReports />} />
-  <Route path="reports/custom" element={<CustomReports />} />
- {/* Management Section */}
-  <Route path="products" element={<AdminProducts />} />
-  <Route path="orders" element={<AdminOrders />} />
-  <Route path="users" element={<AdminUsers />} />
-  <Route path="payments" element={<AdminPayments />} />
-  <Route path="feedback" element={<AdminFeedback />} />
-  <Route path="services" element={<AdminServices />} />
-  <Route path="bookings" element={<AdminBookings />} />
-  <Route path="sales" element={<Adminsalesmanagement />} />
-  <Route path="help-support" element={<AdminHelpAndSupport />} />
+          {/* Dashboard */}
+          <Route path="dashboard" element={<AdminDashboard />} />
+          
+          {/* Reports Section - Simplified */}
+          <Route path="reports" element={<AdminReports />} />
+          <Route path="reports/purchase-orders" element={<PurchaseOrdersReport />} />
+          <Route path="reports/service-bookings" element={<ServiceBookingReports />} />
+          <Route path="reports/orders" element={<OrderReports />} />
+          {/* CustomReports route removed - not part of streamlined system */}
+          
+          {/* Management Section */}
+          <Route path="products" element={<AdminProducts />} />
+          <Route path="orders" element={<AdminOrders />} />
+          <Route path="users" element={<AdminUsers />} />
+          <Route path="payments" element={<AdminPayments />} />
+          <Route path="feedback" element={<AdminFeedback />} />
+          <Route path="services" element={<AdminServices />} />
+          <Route path="bookings" element={<AdminBookings />} />
+          <Route path="sales" element={<Adminsalesmanagement />} />
+          <Route path="help-support" element={<AdminHelpAndSupport />} />
         </Route>
 
         {/* Public Error Pages */}

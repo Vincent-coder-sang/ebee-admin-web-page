@@ -59,12 +59,8 @@ const menuItems = [
         id: "order-reports",
         label: "Order Analytics",
         path: "/admin/reports/orders",
-      },
-      {
-        id: "custom-reports",
-        label: "Custom Reports",
-        path: "/admin/reports/custom",
       }
+      // Removed: Custom Reports
     ]
   },
   {
