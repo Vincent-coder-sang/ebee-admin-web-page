@@ -39,7 +39,7 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 		},
 		filters: {
-			type: DataTypes.JSON,
+			type: DataTypes.TEXT,
 			allowNull: true,
 		},
 		period: {
