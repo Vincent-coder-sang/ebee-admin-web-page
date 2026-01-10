@@ -63,11 +63,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
+import {
+  getFeedbacks,
+  deleteFeedback,
+  updateFeedback,
+  addFeedback,
+  getProducts
+} from '@/features/slices/feedbackSlice';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
-import { addFeedback, deleteFeedback, getFeedbacks, updateFeedback } from '@/features/slices/feedbackSlice';
-import { fetchProducts } from '@/features/slices/productSlice';
 
 const AdminFeedback = () => {
   const dispatch = useDispatch();
@@ -105,16 +109,22 @@ const AdminFeedback = () => {
 
   useEffect(() => {
     dispatch(getFeedbacks());
-    dispatch(fetchProducts());
+    dispatch(getProducts());
   }, [dispatch]);
 
+  // Ensure feedbacks is always an array
+  const feedbacksArray = Array.isArray(feedbacks) ? feedbacks : [];
+  
+  // Ensure products is always an array
+  const productsArray = Array.isArray(products) ? products : [];
+
   // Get unique product names from feedbacks
-  const productNames = [...new Set(feedbacks
-    .filter(f => f.productName)
+  const productNames = [...new Set(feedbacksArray
+    .filter(f => f && f.productName)
     .map(f => f.productName))];
 
   // Filter feedbacks based on multiple criteria
-  const filteredFeedbacks = feedbacks.filter(feedback => {
+  const filteredFeedbacks = feedbacksArray.filter(feedback => {
     if (!feedback) return false;
     
     // Search filter
@@ -123,7 +133,8 @@ const AdminFeedback = () => {
        feedback.email?.toLowerCase().includes(searchTerm.toLowerCase()) || 
        feedback.message?.toLowerCase().includes(searchTerm.toLowerCase()) ||
        feedback.productName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-       feedback.category?.toLowerCase().includes(searchTerm.toLowerCase()));
+       feedback.category?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      !searchTerm;
     
     // Status filter
     const matchesStatus = 
@@ -151,12 +162,12 @@ const AdminFeedback = () => {
 
   // Statistics
   const stats = {
-    total: feedbacks.length,
-    pending: feedbacks.filter(f => f.status === 'pending').length,
-    reviewed: feedbacks.filter(f => f.status === 'reviewed').length,
-    resolved: feedbacks.filter(f => f.status === 'resolved').length,
-    averageRating: feedbacks.length > 0 
-      ? (feedbacks.reduce((sum, f) => sum + (f.rating || 0), 0) / feedbacks.length).toFixed(1)
+    total: feedbacksArray.length,
+    pending: feedbacksArray.filter(f => f && f.status === 'pending').length,
+    reviewed: feedbacksArray.filter(f => f && f.status === 'reviewed').length,
+    resolved: feedbacksArray.filter(f => f && f.status === 'resolved').length,
+    averageRating: feedbacksArray.length > 0 
+      ? (feedbacksArray.reduce((sum, f) => sum + ((f && f.rating) || 0), 0) / feedbacksArray.length).toFixed(1)
       : 0
   };
 
@@ -308,10 +319,11 @@ const AdminFeedback = () => {
   };
 
   const renderStars = (rating) => {
+    const ratingValue = rating || 0;
     return (
       <div className="flex gap-0.5">
         {[1, 2, 3, 4, 5].map((star) => (
-          star <= rating ? (
+          star <= ratingValue ? (
             <MdStar key={star} className="w-4 h-4 text-yellow-500 fill-yellow-500" />
           ) : (
             <MdStarBorder key={star} className="w-4 h-4 text-yellow-500" />
@@ -322,7 +334,7 @@ const AdminFeedback = () => {
   };
 
   // Loading state
-  if (status === "pending" && feedbacks.length === 0) {
+  if (status === "pending" && feedbacksArray.length === 0) {
     return (
       <div className="p-4 space-y-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -355,18 +367,18 @@ const AdminFeedback = () => {
         <CardContent className="p-6 space-y-4">
           <div className="flex items-start justify-between">
             <div>
-              <h3 className="text-lg font-semibold">{selectedFeedback.name || 'Anonymous'}</h3>
+              <h3 className="text-lg font-semibold">{selectedFeedback?.name || 'Anonymous'}</h3>
               <div className="flex items-center gap-4 mt-2">
-                <Badge variant={selectedFeedback.status === 'resolved' ? 'default' : 
-                               selectedFeedback.status === 'reviewed' ? 'secondary' : 'outline'}>
-                  {selectedFeedback.status?.toUpperCase()}
+                <Badge variant={selectedFeedback?.status === 'resolved' ? 'default' : 
+                               selectedFeedback?.status === 'reviewed' ? 'secondary' : 'outline'}>
+                  {selectedFeedback?.status?.toUpperCase() || 'PENDING'}
                 </Badge>
                 <div className="flex items-center gap-2">
-                  {renderStars(selectedFeedback.rating)}
-                  <span className="text-sm text-gray-500">({selectedFeedback.rating}/5)</span>
+                  {renderStars(selectedFeedback?.rating)}
+                  <span className="text-sm text-gray-500">({selectedFeedback?.rating || 0}/5)</span>
                 </div>
                 <span className="text-sm text-gray-500">
-                  {formatDate(selectedFeedback.createdAt)}
+                  {formatDate(selectedFeedback?.createdAt)}
                 </span>
               </div>
             </div>
@@ -382,14 +394,14 @@ const AdminFeedback = () => {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => handleTogglePublic(selectedFeedback.id, selectedFeedback.isPublic)}
+                onClick={() => handleTogglePublic(selectedFeedback?.id, selectedFeedback?.isPublic)}
               >
-                {selectedFeedback.isPublic ? (
+                {selectedFeedback?.isPublic ? (
                   <MdVisibilityOff className="w-4 h-4 mr-2" />
                 ) : (
                   <MdVisibility className="w-4 h-4 mr-2" />
                 )}
-                {selectedFeedback.isPublic ? 'Unpublish' : 'Publish'}
+                {selectedFeedback?.isPublic ? 'Unpublish' : 'Publish'}
               </Button>
             </div>
           </div>
@@ -399,11 +411,11 @@ const AdminFeedback = () => {
               <Label className="text-sm font-medium text-gray-500">Email</Label>
               <div className="flex items-center gap-2">
                 <MdEmail className="w-4 h-4 text-gray-400" />
-                <span>{selectedFeedback.email || 'Not provided'}</span>
+                <span>{selectedFeedback?.email || 'Not provided'}</span>
               </div>
             </div>
             
-            {selectedFeedback.productName && (
+            {selectedFeedback?.productName && (
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-gray-500">Product</Label>
                 <div className="flex items-center gap-2">
@@ -413,7 +425,7 @@ const AdminFeedback = () => {
               </div>
             )}
             
-            {selectedFeedback.category && (
+            {selectedFeedback?.category && (
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-gray-500">Category</Label>
                 <div className="flex items-center gap-2">
@@ -428,12 +440,12 @@ const AdminFeedback = () => {
             <Label className="text-sm font-medium text-gray-500">Feedback Message</Label>
             <Card className="bg-gray-50">
               <CardContent className="p-4">
-                <p className="text-gray-700 whitespace-pre-wrap">{selectedFeedback.message}</p>
+                <p className="text-gray-700 whitespace-pre-wrap">{selectedFeedback?.message}</p>
               </CardContent>
             </Card>
           </div>
 
-          {selectedFeedback.response ? (
+          {selectedFeedback?.response ? (
             <div className="space-y-2">
               <Label className="text-sm font-medium text-gray-500">Your Response</Label>
               <Card className="bg-blue-50">
@@ -672,7 +684,7 @@ const AdminFeedback = () => {
                     </TableHeader>
                     <TableBody>
                       {filteredFeedbacks.map((feedback) => (
-                        <TableRow key={feedback.id}>
+                        <TableRow key={feedback.id || Math.random()}>
                           <TableCell>
                             <div>
                               <p className="font-medium">{feedback.name || 'Anonymous'}</p>
@@ -694,7 +706,7 @@ const AdminFeedback = () => {
                           <TableCell>
                             <div className="flex items-center gap-2">
                               {renderStars(feedback.rating)}
-                              <span className="text-sm">({feedback.rating})</span>
+                              <span className="text-sm">({feedback.rating || 0})</span>
                             </div>
                           </TableCell>
                           <TableCell>
@@ -705,7 +717,7 @@ const AdminFeedback = () => {
                               variant={feedback.status === 'resolved' ? 'default' : 
                                       feedback.status === 'reviewed' ? 'secondary' : 'outline'}
                             >
-                              {feedback.status}
+                              {feedback.status || 'pending'}
                             </Badge>
                             {feedback.isPublic && (
                               <Badge variant="outline" className="ml-2 bg-green-50">
@@ -738,7 +750,10 @@ const AdminFeedback = () => {
                                     <MdEdit className="mr-2 h-4 w-4" />
                                     Edit
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => setResponseDialogOpen(true)}>
+                                  <DropdownMenuItem onClick={() => {
+                                    setSelectedFeedback(feedback);
+                                    setResponseDialogOpen(true);
+                                  }}>
                                     <MdReply className="mr-2 h-4 w-4" />
                                     {feedback.response ? 'Edit Response' : 'Add Response'}
                                   </DropdownMenuItem>
