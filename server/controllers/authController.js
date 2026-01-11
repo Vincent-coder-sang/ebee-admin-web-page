@@ -133,7 +133,7 @@ const forgotPassword = async (req, res) => {
     user.resetTokenExpires = resetTokenExpires;
     await user.save();
 
-    const resetLink = `https://ebee-website.onrender.com/auth/reset-password/${resetToken}`;
+    const resetLink = `https://ebee-admin-kjn8.onrender.com/auth/reset-password/${resetToken}`;
 
     sendPasswordResetEmail(email, user.name, resetLink);
 

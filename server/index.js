@@ -32,7 +32,7 @@ const app = express();
 const port = 3001;
 
 app.use(
-  cors({ origin: "https://ebee-website.onrender.com", credentials: true })
+  cors({ origin: "https://ebee-admin-kjn8.onrender.com", credentials: true })
 );
 
 app.use(express.json()); // For parsing JSON bodies

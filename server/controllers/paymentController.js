@@ -64,7 +64,7 @@ const initiatePayheroSTKPush = async (req, res) => {
         external_reference: reference,
         callback_url:
           process.env.PAYMENT_CALLBACK_URL ||
-          "https://ebee-website.onrender.com/api/payment/callback",
+          "https://ebee-admin-kjn8.onrender.com/api/payment/callback",
       },
       {
         headers: {
