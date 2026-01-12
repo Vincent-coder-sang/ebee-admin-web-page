@@ -107,10 +107,10 @@ const getDispatchById = async (req, res) => {
 
 // 🔹 Delete a dispatch
 const deleteDispatch = async (req, res) => {
-  const { id } = req.params;
+  const { dispatchId } = req.params;
 
   try {
-    const dispatch = await Dispatches.findByPk(id);
+    const dispatch = await Dispatches.findByPk(dispatchId);
 
     if (!dispatch) {
       return res.status(404).json({ success: false, message: "Dispatch not found" });
@@ -126,11 +126,11 @@ const deleteDispatch = async (req, res) => {
 
 // 🔹 Update a dispatch
 const updateDispatch = async (req, res) => {
-  const { id } = req.params;
+  const { dispatchId } = req.params;
   const { deliveryDate, status, driverId } = req.body;
 
   try {
-    const dispatch = await Dispatches.findByPk(id);
+    const dispatch = await Dispatches.findByPk(dispatchId);
 
     if (!dispatch) {
       return res.status(404).json({ success: false, message: "Dispatch not found" });
@@ -154,4 +154,5 @@ module.exports = {
   createDispatch,
   deleteDispatch,
   updateDispatch,
+  getDispatchById
 };
