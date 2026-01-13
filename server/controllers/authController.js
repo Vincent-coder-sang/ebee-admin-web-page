@@ -101,7 +101,20 @@ const login = async (req, res) => {
 
     const userToken = generateAuthToken(user);
 
-    res.status(200).json({ message: "Login success", token: userToken });
+    res.status(200).json({
+  success: true,
+  message: "Login success",
+  token: userToken,
+  data: {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    userType: user.userType,
+    isApproved: user.isApproved
+  }
+});
+
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: error.message });
