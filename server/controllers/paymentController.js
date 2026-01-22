@@ -12,17 +12,42 @@ const encodedCredentials = Buffer.from(
   `${apiUsername}:${apiPassword}`
 ).toString("base64");
 
-// ✅ STK Push Payment Initiation
 const initiatePayheroSTKPush = async (req, res) => {
   try {
-    const { phone, amount, orderId } = req.body;
+    const { phone, orderId } = req.body;
     const userId = req.user.id;
 
-    // Validate request fields
-    if (!phone || !amount || !userId || !orderId) {
+    if (!phone || !orderId) {
       return res.status(400).json({
         success: false,
-        message: "Phone, amount, userId, and orderId are required.",
+        message: "Phone and orderId are required.",
+      });
+    }
+
+    // 🔍 Fetch order
+    const order = await Orders.findByPk(orderId);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found.",
+      });
+    }
+
+    if (order.paymentStatus === "Paid") {
+      return res.status(400).json({
+        success: false,
+        message: "Order already paid.",
+      });
+    }
+
+    // 🔐 Amount from order (SINGLE SOURCE OF TRUTH)
+    const amount = Math.round(order.totalAmount);
+
+    if (amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid order amount.",
       });
     }
 
@@ -32,32 +57,28 @@ const initiatePayheroSTKPush = async (req, res) => {
 
     const reference = `PAY-${userId}-${Date.now()}-${orderId}`;
 
-    // Check for existing pending payments for this order
+    // ⛔ Prevent duplicate pending payments
     const existingPayment = await Payments.findOne({
       where: {
         orderId,
-        [Op.or]: [
-          { status: "Pending" },
-          { status: "QUEUED" },
-          { status: null }
-        ]
+        status: {
+          [Op.in]: ["Pending", "QUEUED", null],
+        },
       },
     });
 
     if (existingPayment) {
-      console.log('⚠️ Existing payment found:', existingPayment.id);
       return res.status(400).json({
         success: false,
-        message: "A payment already exists for this order. Please wait for it to complete.",
-        existingPaymentId: existingPayment.id
+        message: "Payment already in progress for this order.",
       });
     }
 
-    // Send STK push
+    // 📡 Send STK Push
     const response = await axios.post(
       "https://backend.payhero.co.ke/api/v2/payments",
       {
-        amount: parseInt(amount),
+        amount,
         phone_number: formattedPhone,
         channel_id: 2409,
         provider: "m-pesa",
@@ -74,44 +95,35 @@ const initiatePayheroSTKPush = async (req, res) => {
       }
     );
 
-    console.log(
-      "📱 Payhero Raw Response:",
-      JSON.stringify(response.data, null, 2)
-    );
-
     const paymentData = response.data;
 
     if (!paymentData?.CheckoutRequestID) {
-      console.error("❌ Invalid payment response:", paymentData);
       return res.status(500).json({
         success: false,
-        message: "Failed to initiate payment. Please try again.",
-        data: paymentData,
+        message: "Failed to initiate payment.",
       });
     }
 
-    // Create payment record
+    // 💾 Save payment
     const payment = await Payments.create({
       amount,
       phoneNumber: formattedPhone,
       status: "QUEUED",
-      reference: reference,
+      reference,
       checkoutRequestId: paymentData.CheckoutRequestID,
       isApproved: false,
       userId,
       orderId,
     });
 
-    console.log('✅ Payment record created:', payment.id);
-
     return res.status(200).json({
       success: true,
-      message: "STK Push sent. Check your phone.",
+      message: "STK Push sent.",
       data: paymentData,
-      paymentId: payment.id
+      paymentId: payment.id,
     });
   } catch (error) {
-    console.error("❌ STK Error:", error?.response?.data || error.message);
+    console.error("❌ STK Error:", error.message);
     return res.status(500).json({
       success: false,
       message: error.message,
@@ -119,157 +131,99 @@ const initiatePayheroSTKPush = async (req, res) => {
   }
 };
 
-// ✅ Payment Callback Handler - FIXED TO MATCH MODELS
+// ============================================================================
+// ✅ PAYMENT CALLBACK
+// ============================================================================
 const handleCallback = async (req, res) => {
   try {
-    const callbackData = req.body;
-    console.log('📱 PayHero Callback Received:', JSON.stringify(callbackData, null, 2));
+    const { response } = req.body;
 
-    if (!callbackData.response) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid callback data.",
-      });
+    if (!response) {
+      return res.status(400).json({ success: false });
     }
 
     const {
-      Amount: amount,
-      Phone: phoneNumber,
-      Status: status,
-      MpesaReceiptNumber: mpesaReceiptNumber,
-      CheckoutRequestID: checkoutRequestId,
-      ExternalReference: reference,
-      ResultCode: resultCode,
-      ResultDesc: resultDesc,
-    } = callbackData.response;
+      Amount,
+      Phone,
+      Status,
+      MpesaReceiptNumber,
+      CheckoutRequestID,
+      ExternalReference,
+      ResultCode,
+    } = response;
 
-    console.log('🔍 Callback Details:', {
-      reference,
-      checkoutRequestId,
-      status,
-      mpesaReceiptNumber,
-      resultCode,
-      resultDesc
-    });
-
-    // Extract userId and orderId from reference (format: PAY-{userId}-{timestamp}-{orderId})
-    const parts = reference.split("-");
+    const parts = ExternalReference.split("-");
     if (parts.length < 4) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid reference format.",
-      });
+      return res.status(400).json({ success: false });
     }
 
     const userId = parts[1];
     const orderId = parts[3];
 
-    console.log('👤 Extracted IDs:', { userId, orderId });
-
-    // Find user and order
-    const user = await Users.findByPk(userId);
     const order = await Orders.findByPk(orderId);
-
-    if (!user || !order) {
-      console.error('❌ User or Order not found:', { userId, orderId });
-      return res.status(404).json({
-        success: false,
-        message: "User or Order not found.",
-      });
+    if (!order) {
+      return res.status(404).json({ success: false });
     }
 
-    // Find payment by reference OR checkoutRequestId
     let payment = await Payments.findOne({
       where: {
         [Op.or]: [
-          { reference: reference },
-          { checkoutRequestId: checkoutRequestId }
-        ]
-      }
+          { reference: ExternalReference },
+          { checkoutRequestId: CheckoutRequestID },
+        ],
+      },
     });
 
-    console.log('💰 Found Payment:', payment ? payment.id : 'Not found');
+    let paymentStatus = Status;
 
-    // Determine payment status based on Pay Hero response
-    let paymentStatus = status;
-    
-    // If Pay Hero doesn't send status, determine from resultCode
     if (!paymentStatus) {
-      if (resultCode === 0) {
-        paymentStatus = "Paid";
-      } else if (resultCode === 1) {
-        paymentStatus = "Failed";
-      } else if (resultCode === 1032) {
-        paymentStatus = "Cancelled";
-      } else {
-        paymentStatus = "Failed";
-      }
+      paymentStatus = ResultCode === 0 ? "Paid" : "Failed";
     }
 
-    // If we have mpesaReceiptNumber, payment is definitely successful
-    if (mpesaReceiptNumber) {
+    if (MpesaReceiptNumber) {
       paymentStatus = "Paid";
     }
 
-    console.log('🎯 Final Payment Status:', paymentStatus);
-
     if (payment) {
-      // Update existing payment
-      console.log('🔄 Updating existing payment:', payment.id);
       await payment.update({
-        amount: amount || payment.amount,
-        phoneNumber: phoneNumber || payment.phoneNumber,
+        amount: Amount || payment.amount,
+        phoneNumber: Phone || payment.phoneNumber,
         status: paymentStatus,
-        mpesaReceiptNumber: mpesaReceiptNumber || payment.mpesaReceiptNumber,
-        isApproved: false,
+        mpesaReceiptNumber: MpesaReceiptNumber,
       });
     } else {
-      // Create new payment only if not found
-      console.log('⚠️ Creating new payment (unexpected)');
       payment = await Payments.create({
-        amount: amount,
-        phoneNumber: phoneNumber,
+        amount: Amount,
+        phoneNumber: Phone,
         status: paymentStatus,
-        reference: reference,
-        checkoutRequestId: checkoutRequestId,
-        mpesaReceiptNumber: mpesaReceiptNumber,
-        userId: userId,
-        orderId: orderId,
-        isApproved: false,//finance or admin will update this
+        reference: ExternalReference,
+        checkoutRequestId: CheckoutRequestID,
+        mpesaReceiptNumber: MpesaReceiptNumber,
+        userId,
+        orderId,
+        isApproved: false,
       });
     }
 
-    // ✅ Update order based on payment status - MATCHING MODEL ENUM
     if (paymentStatus === "Paid") {
-      console.log('✅ Updating order paymentStatus to Paid and orderStatus to Processing');
       await order.update({
-        paymentStatus: "Paid", // Matches Orders model ENUM
-        orderStatus: "Processing", // Matches Orders model ENUM
+        paymentStatus: "Paid",
+        orderStatus: "Processing",
       });
-    } else if (paymentStatus === "Pending" || paymentStatus === "Cancelled") {
-      console.log('❌ Updating order paymentStatus to Cancelled and orderStatus to Cancelled');
+    } else if (paymentStatus === "Cancelled" || paymentStatus === "Failed") {
       await order.update({
-        paymentStatus: "Cancelled", // Matches Orders model ENUM
-        orderStatus: "Cancelled", // Matches Orders model ENUM
+        paymentStatus: "Cancelled",
+        orderStatus: "Cancelled",
       });
     }
 
-    console.log('🎉 Payment processing completed successfully');
-
-    return res.status(200).json({
-      success: true,
-      message: "Payment processed successfully.",
-      data: payment,
-    });
+    return res.status(200).json({ success: true });
   } catch (error) {
     console.error("❌ Callback Error:", error.message);
-    console.error("❌ Callback Error Stack:", error.stack);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    return res.status(500).json({ success: false });
   }
 };
+
 
 // ✅ Get Latest Paid Payment for a User
 const getLatestPaidPayment = async (req, res) => {
