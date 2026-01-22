@@ -14,10 +14,10 @@ const encodedCredentials = Buffer.from(
 
 const initiatePayheroSTKPush = async (req, res) => {
   try {
-    const { phone, orderId } = req.body;
+    const { phone, orderId, amount } = req.body;
     const userId = req.user.id;
 
-    if (!phone || !orderId) {
+    if (!phone || !orderId || !amount) {
       return res.status(400).json({
         success: false,
         message: "Phone and orderId are required.",
@@ -41,8 +41,7 @@ const initiatePayheroSTKPush = async (req, res) => {
       });
     }
 
-    // 🔐 Amount from order (SINGLE SOURCE OF TRUTH)
-    const amount = Math.round(order.totalAmount);
+
 
     if (amount <= 0) {
       return res.status(400).json({
