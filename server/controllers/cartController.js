@@ -45,7 +45,6 @@ const addProductToCart = async (req, res) => {
 const getCart = async (req, res) => {
   try {
     const { userId } = req.params;
-    // const userId = req.user.id
 
     const cart = await Carts.findOne({
       where: { userId },
@@ -65,8 +64,8 @@ const getCart = async (req, res) => {
     });
 
     if (!cart || !cart.cartitems || cart.cartitems.length === 0) {
-  return res.status(404).json({ success: false, message: "Cart is empty" });
-}
+       return res.status(404).json({ success: false, message: "Cart is empty" });
+    }
 
     res.json({ success: true, data: cart });
   } catch (error) {
@@ -135,22 +134,34 @@ const removeItemFromCart = async (req, res) => {
 };
 
 const clearCart = async (req, res) => {
-  try {
-    const { userId } = req.params;
+  const userId = req.user.id;
 
+  try {
     const cart = await Carts.findOne({ where: { userId } });
 
+    // ✅ Cart already cleared → still success
     if (!cart) {
-      return res.status(404).json({ success: false, message: "Cart not found" });
+      return res.status(200).json({
+        success: true,
+        message: "Cart already empty.",
+      });
     }
 
     await CartItems.destroy({ where: { cartId: cart.id } });
+    await Carts.destroy({ where: { id: cart.id } });
 
-    res.json({ success: true, message: "Cart cleared successfully" });
+    return res.status(200).json({
+      success: true,
+      message: "Cart cleared successfully.",
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
+
 
 module.exports = {
   addProductToCart,
