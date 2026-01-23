@@ -18,7 +18,7 @@ const router = express.Router();
 router.get("/get/:userId", verifyToken, getCart); // ✅ done
 
 // Clear user's cart
-router.get("/clear", verifyToken, clearCart); // ✅ done
+router.delete("/clear", verifyToken, clearCart); // ✅ done
 
 // Add product to cart
 router.post("/add", verifyToken, addProductToCart); // ✅ done
