@@ -22,8 +22,6 @@ module.exports = (sequelize, DataTypes) => {
         model: "UserAddresses",
         key: "id",
       },
-      onDelete: "CASCADE",
-      onUpdate: "CASCADE",
     },
     cartId: {
       type: DataTypes.INTEGER,
@@ -32,8 +30,6 @@ module.exports = (sequelize, DataTypes) => {
        model: 'Carts',
         key: "id",
       },
-      onDelete: "CASCADE",
-      onUpdate: "CASCADE",
     },
     userId: {
       type: DataTypes.INTEGER,
@@ -42,8 +38,6 @@ module.exports = (sequelize, DataTypes) => {
         model: "Users",
         key: "id",
       },
-      onDelete: "CASCADE",
-      onUpdate: "CASCADE",
     },
   });
 
@@ -51,17 +45,14 @@ module.exports = (sequelize, DataTypes) => {
     Orders.belongsTo(models.UserAddresses, {
       foreignKey: "userAddressId",
       as: "userAddress", // singular
-      onDelete: "CASCADE",
     });
     Orders.belongsTo(models.Carts, {
       foreignKey: "cartId",
       as: "cart", // singular
-      onDelete: "CASCADE",
     });
     Orders.belongsTo(models.Users, {
       foreignKey: "userId",
       as: "user",
-      onDelete: "CASCADE",
     });
     Orders.hasMany(models.OrderItems, {
       foreignKey: "orderId",
