@@ -1,5 +1,13 @@
 /** @format */
-const { Orders,Payments, OrderItems, Products,Carts,CartItems,  sequelize } = require("../models");
+const {
+  Orders,
+  Payments,
+  OrderItems,
+  Products,
+  Carts,
+  CartItems,
+  sequelize,
+} = require("../models");
 
 const createOrderFromCart = async (req, res) => {
   const { cartId, userAddressId } = req.body;
@@ -9,10 +17,16 @@ const createOrderFromCart = async (req, res) => {
   try {
     transaction = await sequelize.transaction();
 
-    // Fetch cart with items
+    // 🛒 Fetch cart with items
     const cart = await Carts.findOne({
-      where: { id: cartId },
-      include: [{ model: CartItems, as: "cartitems", include: ["product"] }],
+      where: { id: cartId, userId },
+      include: [
+        {
+          model: CartItems,
+          as: "cartitems",
+          include: ["product"],
+        },
+      ],
       transaction,
     });
 
@@ -23,12 +37,17 @@ const createOrderFromCart = async (req, res) => {
       });
     }
 
-    // Compute total & validate stock
+    // 💰 Compute total & prepare order items
     let totalPrice = 0;
     const orderItems = [];
 
     for (const item of cart.cartitems) {
+      if (!item.product) {
+        throw new Error("Product not found in cart item.");
+      }
+
       totalPrice += item.quantity * item.product.price;
+
       orderItems.push({
         productId: item.productId,
         quantity: item.quantity,
@@ -36,20 +55,20 @@ const createOrderFromCart = async (req, res) => {
       });
     }
 
-    // Create order
+    // 🧾 Create order (DO NOT touch cart)
     const newOrder = await Orders.create(
       {
         userId,
-        totalPrice,
         cartId,
         userAddressId,
+        totalPrice,
         orderStatus: "Pending",
         paymentStatus: "Pending",
       },
       { transaction }
     );
 
-    // ✅ Create order items
+    // 📦 Create order items
     await OrderItems.bulkCreate(
       orderItems.map((item) => ({
         ...item,
@@ -58,9 +77,8 @@ const createOrderFromCart = async (req, res) => {
       { transaction }
     );
 
-    // Optional: clear cart if needed
-    await CartItems.destroy({ where: {cartId }, transaction });
-    await Carts.destroy({ where: {id: cartId, userId }, transaction });
+    // ❌ DO NOT clear cart here
+    // Cart will be cleared ONLY after payment success
 
     await transaction.commit();
 
@@ -70,8 +88,12 @@ const createOrderFromCart = async (req, res) => {
       order: newOrder,
     });
   } catch (error) {
-    if (transaction && !transaction.finished) await transaction.rollback();
-    console.error("Order creation error:", error);
+    if (transaction && !transaction.finished) {
+      await transaction.rollback();
+    }
+
+    console.error("❌ Order creation error:", error);
+
     return res.status(500).json({
       success: false,
       message: error.message || "Failed to create order.",
@@ -79,6 +101,9 @@ const createOrderFromCart = async (req, res) => {
   }
 };
 
+// ============================================================================
+// باقي الملفات بدون تغيير
+// ============================================================================
 
 // ✅ Get All Orders (admin)
 const getOrders = async (req, res) => {
@@ -92,7 +117,15 @@ const getOrders = async (req, res) => {
             {
               model: Products,
               as: "product",
-              attributes: ["id", "name", "category", "description", "price", "imageUrl", "stockQuantity"],
+              attributes: [
+                "id",
+                "name",
+                "category",
+                "description",
+                "price",
+                "imageUrl",
+                "stockQuantity",
+              ],
             },
           ],
         },
@@ -105,9 +138,10 @@ const getOrders = async (req, res) => {
   }
 };
 
-// ✅ Get a Single Order
+// ✅ Get Single Order
 const getOrder = async (req, res) => {
   const orderId = req.params.orderId;
+
   try {
     const order = await Orders.findByPk(orderId, {
       include: [
@@ -118,7 +152,15 @@ const getOrder = async (req, res) => {
             {
               model: Products,
               as: "product",
-               attributes: ["id", "name", "category", "description", "price", "imageUrl", "stockQuantity"],
+              attributes: [
+                "id",
+                "name",
+                "category",
+                "description",
+                "price",
+                "imageUrl",
+                "stockQuantity",
+              ],
             },
           ],
         },
@@ -138,9 +180,10 @@ const getOrder = async (req, res) => {
   }
 };
 
-// ✅ Get My Orders (for customers)
+// ✅ Get My Orders
 const getMyOrders = async (req, res) => {
   const userId = req.user.id;
+
   try {
     const orders = await Orders.findAll({
       where: { userId },
@@ -152,8 +195,15 @@ const getMyOrders = async (req, res) => {
             {
               model: Products,
               as: "product",
-               attributes: ["id", "name", "category", "description", "price", "imageUrl", "stockQuantity"],
-      
+              attributes: [
+                "id",
+                "name",
+                "category",
+                "description",
+                "price",
+                "imageUrl",
+                "stockQuantity",
+              ],
             },
           ],
         },
@@ -166,13 +216,14 @@ const getMyOrders = async (req, res) => {
   }
 };
 
-// ✅ Update an Order
+// ✅ Update Order
 const updateOrders = async (req, res) => {
   const orderId = req.params.orderId;
   const { totalPrice, orderStatus, paymentStatus, userAddressId } = req.body;
 
   try {
     const order = await Orders.findByPk(orderId);
+
     if (!order) {
       return res.status(404).json({
         success: false,
@@ -180,17 +231,27 @@ const updateOrders = async (req, res) => {
       });
     }
 
-    await order.update({ totalPrice, orderStatus, paymentStatus, userAddressId });
-    res.status(200).json({ success: true, message: "Order updated successfully" });
+    await order.update({
+      totalPrice,
+      orderStatus,
+      paymentStatus,
+      userAddressId,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Order updated successfully",
+    });
   } catch (error) {
-    console.error("Update error:", error);
+    console.error("❌ Update error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ✅ Delete an Order
+// ✅ Delete Order
 const deleteOrders = async (req, res) => {
   const orderId = req.params.orderId;
+
   try {
     const order = await Orders.findOne({ where: { id: orderId } });
 
@@ -202,7 +263,11 @@ const deleteOrders = async (req, res) => {
     }
 
     await Orders.destroy({ where: { id: orderId } });
-    res.status(200).json({ success: true, message: "Order deleted successfully" });
+
+    res.status(200).json({
+      success: true,
+      message: "Order deleted successfully",
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
