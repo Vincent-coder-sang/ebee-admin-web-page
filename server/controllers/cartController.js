@@ -64,7 +64,11 @@ const getCart = async (req, res) => {
     });
 
     if (!cart || !cart.cartitems || cart.cartitems.length === 0) {
-       return res.status(404).json({ success: false, message: "Cart is empty" });
+       return res.status(200).json({
+  success: true,
+  data: [],
+});
+
     }
 
     res.json({ success: true, data: cart });
