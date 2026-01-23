@@ -143,7 +143,7 @@ const clearCart = async (req, res) => {
   try {
     const cart = await Carts.findOne({ where: { userId } });
 
-    // ✅ Cart already cleared → still success
+    // Cart exists but is empty → OK
     if (!cart) {
       return res.status(200).json({
         success: true,
@@ -151,12 +151,14 @@ const clearCart = async (req, res) => {
       });
     }
 
-    await CartItems.destroy({ where: { cartId: cart.id } });
-    await Carts.destroy({ where: { id: cart.id } });
+    // ✅ ONLY clear items
+    await CartItems.destroy({
+      where: { cartId: cart.id },
+    });
 
     return res.status(200).json({
       success: true,
-      message: "Cart cleared successfully.",
+      message: "Cart items cleared successfully.",
     });
   } catch (error) {
     return res.status(500).json({
