@@ -1,23 +1,31 @@
 /** @format */
 const axios = require("axios");
-const { Payments, Users, Orders } = require("../models");
-const { Op, where } = require("sequelize");
+const { Payments, Orders } = require("../models");
+const { Op } = require("sequelize");
 
-// Payhero API credentials
-const apiUsername = process.env.PAYHERO_API_USERNAME || "LykioY8LI38TwLWSEOpX";
+// ============================================================================
+// 🔐 PAYHERO CREDENTIALS
+// ============================================================================
+const apiUsername =
+  process.env.PAYHERO_API_USERNAME || "LykioY8LI38TwLWSEOpX";
 const apiPassword =
   process.env.PAYHERO_API_PASSWORD ||
   "blP4TJA0O8yVtyH4G7U7AzpwktnTJOx31THnoPzM";
+
 const encodedCredentials = Buffer.from(
   `${apiUsername}:${apiPassword}`
 ).toString("base64");
 
+// ============================================================================
+// 🚀 INITIATE STK PUSH
+// ============================================================================
 const initiatePayheroSTKPush = async (req, res) => {
   try {
-    const { phone, orderId, amount } = req.body;
+    const { phone, orderId } = req.body;
     const userId = req.user.id;
 
-    if (!phone || !orderId || !amount) {
+    // ✅ Validate required fields
+    if (!phone || !orderId) {
       return res.status(400).json({
         success: false,
         message: "Phone and orderId are required.",
@@ -41,15 +49,17 @@ const initiatePayheroSTKPush = async (req, res) => {
       });
     }
 
+    // ✅ Derive amount from order (IMPORTANT FIX)
+    const amount = Number(order.totalPrice);
 
-
-    if (amount <= 0) {
+    if (!amount || amount <= 0) {
       return res.status(400).json({
         success: false,
         message: "Invalid order amount.",
       });
     }
 
+    // 📞 Format phone number
     const formattedPhone = phone.startsWith("0")
       ? `254${phone.slice(1)}`
       : phone;
@@ -131,15 +141,12 @@ const initiatePayheroSTKPush = async (req, res) => {
 };
 
 // ============================================================================
-// ✅ PAYMENT CALLBACK
+// 🔁 PAYMENT CALLBACK
 // ============================================================================
 const handleCallback = async (req, res) => {
   try {
     const { response } = req.body;
-
-    if (!response) {
-      return res.status(400).json({ success: false });
-    }
+    if (!response) return res.status(400).json({ success: false });
 
     const {
       Amount,
@@ -160,9 +167,7 @@ const handleCallback = async (req, res) => {
     const orderId = parts[3];
 
     const order = await Orders.findByPk(orderId);
-    if (!order) {
-      return res.status(404).json({ success: false });
-    }
+    if (!order) return res.status(404).json({ success: false });
 
     let payment = await Payments.findOne({
       where: {
@@ -173,15 +178,9 @@ const handleCallback = async (req, res) => {
       },
     });
 
-    let paymentStatus = Status;
+    let paymentStatus = Status || (ResultCode === 0 ? "Paid" : "Failed");
 
-    if (!paymentStatus) {
-      paymentStatus = ResultCode === 0 ? "Paid" : "Failed";
-    }
-
-    if (MpesaReceiptNumber) {
-      paymentStatus = "Paid";
-    }
+    if (MpesaReceiptNumber) paymentStatus = "Paid";
 
     if (payment) {
       await payment.update({
@@ -209,7 +208,7 @@ const handleCallback = async (req, res) => {
         paymentStatus: "Paid",
         orderStatus: "Processing",
       });
-    } else if (paymentStatus === "Cancelled" || paymentStatus === "Failed") {
+    } else if (["Cancelled", "Failed"].includes(paymentStatus)) {
       await order.update({
         paymentStatus: "Cancelled",
         orderStatus: "Cancelled",
@@ -223,17 +222,13 @@ const handleCallback = async (req, res) => {
   }
 };
 
-
-// ✅ Get Latest Paid Payment for a User
+// ============================================================================
+// 📊 QUERIES
+// ============================================================================
 const getLatestPaidPayment = async (req, res) => {
   try {
-    const userId = req.user.id;
-
     const payment = await Payments.findOne({
-      where: {
-        userId,
-        status: "Paid",
-      },
+      where: { userId: req.user.id, status: "Paid" },
       order: [["createdAt", "DESC"]],
     });
 
@@ -244,117 +239,82 @@ const getLatestPaidPayment = async (req, res) => {
       });
     }
 
-    return res.status(200).json({
-      success: true,
-      data: payment,
-    });
+    res.status(200).json({ success: true, data: payment });
   } catch (error) {
-    console.error("Payment fetch error:", error.message);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ✅ Admin: Get All Payment History
 const getPaymentHistory = async (req, res) => {
   try {
     const payments = await Payments.findAll({
       order: [["createdAt", "DESC"]],
     });
-
-    return res.status(200).json({
-      success: true,
-      data: payments,
-    });
+    res.status(200).json({ success: true, data: payments });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const approvePayments = async (req, res) => {
   try {
-    const paymentId = req.params.paymentId;
+    const { paymentId } = req.params;
     const { isApproved } = req.body;
-    const payment = await Payments.findOne({
-      where: {
-        id: paymentId,
-      },
-    });
 
+    const payment = await Payments.findByPk(paymentId);
     if (!payment) {
       return res.status(404).json({
         success: false,
-        message: "payment not found.",
+        message: "Payment not found.",
       });
     }
 
-    await Payments.update({ isApproved }, { where: { id: paymentId } });
-
-    res.status(200).json({success: true, message: "Payment approval status updated successfully."});
+    await payment.update({ isApproved });
+    res.status(200).json({
+      success: true,
+      message: "Payment approval status updated successfully.",
+    });
   } catch (error) {
-    console.log(error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ✅ Get Payment Status by Checkout Request ID
 const getPaymentStatusByCheckoutRequestId = async (req, res) => {
   try {
-    const { checkoutRequestId } = req.params;
     const payment = await Payments.findOne({
-      where: { checkoutRequestId },
+      where: { checkoutRequestId: req.params.checkoutRequestId },
     });
 
     if (!payment) {
       return res.status(404).json({
         success: false,
-        message: 'Payment not found.',
+        message: "Payment not found.",
       });
     }
 
-    return res.status(200).json({
-      success: true,
-      data: payment,
-    });
+    res.status(200).json({ success: true, data: payment });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ✅ Get Payment Status by Order ID
 const getPaymentStatusByOrderId = async (req, res) => {
   try {
-    const { orderId } = req.params;
-
     const payment = await Payments.findOne({
-      where: { orderId },
-      order: [['createdAt', 'DESC']],
+      where: { orderId: req.params.orderId },
+      order: [["createdAt", "DESC"]],
     });
 
     if (!payment) {
       return res.status(404).json({
         success: false,
-        message: 'Payment not found for this order.',
+        message: "Payment not found for this order.",
       });
     }
 
-    return res.status(200).json({
-      success: true,
-      data: payment,
-    });
+    res.status(200).json({ success: true, data: payment });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -365,5 +325,5 @@ module.exports = {
   getPaymentHistory,
   approvePayments,
   getPaymentStatusByCheckoutRequestId,
-  getPaymentStatusByOrderId
+  getPaymentStatusByOrderId,
 };
