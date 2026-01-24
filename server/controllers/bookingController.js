@@ -121,6 +121,13 @@ const deleteBooking = async (req, res) => {
 const getBookingsByUser = async (req, res) => {
   const { userId } = req.params;
 
+  if (!userId) {
+    return res.status(400).json({
+      success: false,
+      message: "userId is required",
+    });
+  }
+
   try {
     const bookings = await Bookings.findAll({
       where: { userId },
@@ -128,6 +135,7 @@ const getBookingsByUser = async (req, res) => {
         { model: Services, as: "service" },
         { model: Users, as: "technician", attributes: ["id", "name", "email"] },
       ],
+      order: [["createdAt", "DESC"]],
     });
 
     res.status(200).json({ success: true, data: bookings });
@@ -136,6 +144,7 @@ const getBookingsByUser = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 
 module.exports = {
   getBookings,

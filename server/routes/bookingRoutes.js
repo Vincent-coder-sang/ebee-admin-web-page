@@ -14,6 +14,7 @@ router.get("/get", verifyToken, getBookings);
 router.post("/create", verifyToken, createBooking);
 router.put("/update/:bookingId", verifyToken, updateBooking);
 router.delete("/delete/:bookingId", verifyToken, deleteBooking);
+// router.get("/my-bookings", verifyToken, getBookingsByUser);
 router.get("/get/:userId", verifyToken, getBookingsByUser);
 
 module.exports = router;
