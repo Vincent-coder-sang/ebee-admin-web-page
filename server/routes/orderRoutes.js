@@ -19,7 +19,6 @@ router.delete("/delete/:orderId", verifyToken, deleteOrders);
 router.put("/update/:orderId", verifyToken, updateOrders);
 router.get("/get", verifyToken, getOrders);
 router.get("/get/:orderId", verifyToken, getOrder);
-// router.get("/user/:userId", verifyToken, getMyOrders);
 router.get("/my", verifyToken, getMyOrders);
 
 
