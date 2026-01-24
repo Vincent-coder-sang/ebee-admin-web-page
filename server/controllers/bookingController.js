@@ -119,12 +119,12 @@ const deleteBooking = async (req, res) => {
 };
 
 const getBookingsByUser = async (req, res) => {
-  const { userId } = req.params;
+  const userId = req.user?.id;
 
   if (!userId) {
-    return res.status(400).json({
+    return res.status(401).json({
       success: false,
-      message: "userId is required",
+      message: "Unauthorized",
     });
   }
 
